@@ -4,22 +4,43 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SalusVPN</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <div class="popup">
 
-      <header class="header">
-        <span class="wordmark">Salus<em>VPN</em></span>
-        <span id="connect-pill" class="status-pill pill--off">
-          <span class="pulse-dot"></span>
-          <span id="status-text">Disconnected</span>
-        </span>
-      </header>
+      <div class="header-wrap">
+        <!-- Decorative Latin arch motif -->
+        <svg class="arch-motif" viewBox="0 0 360 72" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M-10,72 C90,-12 270,-12 370,72" fill="none" stroke="#3a2e22" stroke-width="1.5"/>
+          <path d="M24,72 C104,8 256,8 336,72"    fill="none" stroke="#3a2e22" stroke-width="0.75"/>
+          <line x1="24"  y1="72" x2="24"  y2="46" stroke="#3a2e22" stroke-width="0.75"/>
+          <line x1="336" y1="72" x2="336" y2="46" stroke="#3a2e22" stroke-width="0.75"/>
+        </svg>
+
+        <header class="header">
+          <div class="brand">
+            <!-- Hexagonal shield mark -->
+            <svg class="shield-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <polygon points="10,1.5 17.8,5.5 17.8,14.5 10,18.5 2.2,14.5 2.2,5.5" stroke="#c9773a" stroke-width="1.2" fill="rgba(201,119,58,0.15)"/>
+              <path d="M13 8.5L8.8 12.7L7 10.9" stroke="#c9773a" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="wordmark">SALUS</span>
+          </div>
+
+          <span id="connect-pill" class="status-pill pill--off">
+            <span class="pulse-dot"></span>
+            <span id="status-text">Disconnected</span>
+          </span>
+        </header>
+      </div>
 
       <section class="card status-card">
         <div class="status-row">
-          <span id="status-relay" class="status-relay">No relay selected</span>
+          <span id="status-relay" class="status-relay">No Relay Selected</span>
           <button id="session-button" class="btn btn--primary">Start</button>
         </div>
         <div class="metrics-grid">
@@ -78,11 +99,11 @@
         </div>
       </section>
 
-      <span id="session-node"      style="display:none"></span>
-      <span id="session-cost"      style="display:none"></span>
-      <span id="session-bot-risk"  style="display:none"></span>
+      <span id="session-node"       style="display:none"></span>
+      <span id="session-cost"       style="display:none"></span>
+      <span id="session-bot-risk"   style="display:none"></span>
       <span id="session-human-lane" style="display:none"></span>
-      <span id="footer-cost"       style="display:none"></span>
+      <span id="footer-cost"        style="display:none"></span>
     </div>
 
     <script src="relayNodes.js"></script>
