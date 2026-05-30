@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { WalletReadyState, type WalletName } from "@solana/wallet-adapter-base";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { getUsdcBalance } from "@/lib/settlement";
 
@@ -8,22 +9,72 @@ function shortenAddress(address: string): string {
   return `${address.slice(0, 4)}...${address.slice(-4)}`;
 }
 
-function isPhantomInstalled(): boolean {
-  if (typeof window === "undefined") return false;
-  return Boolean(window.solana?.isPhantom);
+const PHANTOM_WALLET_NAME = "Phantom" as WalletName;
+
+function getPhantomProvider() {
+  if (typeof window === "undefined") return null;
+  const provider = window.solana;
+  return provider?.isPhantom ? provider : null;
 }
 
 export default function WalletConnect() {
   const { connection } = useConnection();
-  const { publicKey, connect, connecting, connected, disconnect } =
-    useWallet();
-  const [phantomInstalled, setPhantomInstalled] = useState(true);
+  const {
+    publicKey,
+    connect,
+    connecting,
+    connected,
+    disconnect,
+    select,
+    wallets,
+    wallet,
+  } = useWallet();
+  const [phantomInstalled, setPhantomInstalled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
+  const [pendingConnect, setPendingConnect] = useState(false);
 
   useEffect(() => {
-    setPhantomInstalled(isPhantomInstalled());
+    const checkPhantom = () => setPhantomInstalled(Boolean(getPhantomProvider()));
+
+    checkPhantom();
+    window.addEventListener("load", checkPhantom);
+
+    const interval = setInterval(checkPhantom, 500);
+    const timeout = setTimeout(() => clearInterval(interval), 3000);
+
+    return () => {
+      window.removeEventListener("load", checkPhantom);
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!pendingConnect || !wallet || connected) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await connect();
+      } catch (err) {
+        if (!cancelled) {
+          const message =
+            err instanceof Error
+              ? err.message
+              : "Failed to connect wallet. Please try again.";
+          setError(message);
+        }
+      } finally {
+        if (!cancelled) setPendingConnect(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingConnect, wallet, connected, connect]);
 
   useEffect(() => {
     if (!connected || !publicKey) {
@@ -47,21 +98,43 @@ export default function WalletConnect() {
   const handleConnect = useCallback(async () => {
     setError(null);
 
-    if (!isPhantomInstalled()) {
+    const phantomProvider = getPhantomProvider();
+    if (!phantomProvider) {
       setPhantomInstalled(false);
+      setError("Phantom wallet is not installed.");
       return;
     }
 
-    try {
-      await connect();
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Failed to connect wallet. Please try again.";
-      setError(message);
+    const phantomWallet = wallets.find((w) => w.adapter.name === "Phantom");
+    if (!phantomWallet) {
+      setError("Phantom adapter is not ready. Refresh and try again.");
+      return;
     }
-  }, [connect]);
+
+    const isReady =
+      phantomWallet.readyState === WalletReadyState.Installed ||
+      phantomWallet.readyState === WalletReadyState.Loadable;
+
+    if (!isReady) {
+      try {
+        select(PHANTOM_WALLET_NAME);
+        await phantomProvider.connect!();
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to connect Phantom."
+        );
+      }
+      return;
+    }
+
+    if (wallet?.adapter.name !== "Phantom") {
+      select(PHANTOM_WALLET_NAME);
+    }
+
+    setPendingConnect(true);
+  }, [wallets, wallet, select]);
+
+  const isBusy = connecting || pendingConnect;
 
   if (!phantomInstalled) {
     return (
@@ -133,10 +206,10 @@ export default function WalletConnect() {
       <button
         type="button"
         onClick={handleConnect}
-        disabled={connecting}
+        disabled={isBusy}
         className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {connecting ? "Connecting..." : "Connect Phantom"}
+        {isBusy ? "Connecting..." : "Connect Phantom"}
       </button>
       {error && (
         <div className="flex items-start justify-between gap-2 rounded-lg border border-accent-red/30 bg-accent-red/10 p-2">
