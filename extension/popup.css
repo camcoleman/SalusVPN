@@ -202,6 +202,65 @@ body {
 
 .btn--sm { padding: 5px 10px; font-size: 11px; }
 
+/* ── Wallet picker ─────────────────────────────── */
+.wallet-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.wallet-picker[hidden] {
+  display: none;
+}
+
+.wallet-picker-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin: 0 0 2px;
+}
+
+.wallet-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.wallet-option:hover {
+  border-color: var(--accent);
+  background: rgba(201, 119, 58, 0.08);
+}
+
+.wallet-option:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.wallet-option-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.wallet-picker-cancel {
+  margin-top: 4px;
+  width: 100%;
+}
+
 /* ── Status card ───────────────────────────────── */
 .status-row {
   display: flex;

@@ -108,7 +108,23 @@
             <button id="end-session-button" class="btn btn--danger" disabled>End</button>
           </div>
         </div>
-        <p id="wallet-hint" class="detail-line dim">Connect wallet on the dashboard to start a session.</p>
+        <p id="wallet-hint" class="detail-line dim">Choose a wallet to connect via your wallet extension.</p>
+        <div id="wallet-picker" class="wallet-picker" hidden>
+          <p class="wallet-picker-title">Connect wallet</p>
+          <button type="button" class="wallet-option" data-wallet="Phantom">
+            <span class="wallet-option-icon">👻</span>
+            <span>Phantom</span>
+          </button>
+          <button type="button" class="wallet-option" data-wallet="MetaMask">
+            <span class="wallet-option-icon">🦊</span>
+            <span>MetaMask</span>
+          </button>
+          <button type="button" class="wallet-option" data-wallet="Solflare">
+            <span class="wallet-option-icon">🔥</span>
+            <span>Solflare</span>
+          </button>
+          <button type="button" id="wallet-picker-cancel" class="btn btn--ghost btn--sm wallet-picker-cancel">Cancel</button>
+        </div>
         <p id="settlement-message" class="detail-line dim" style="display:none"></p>
         <button id="settle-dashboard-button" class="btn btn--ghost btn--sm" style="display:none; margin-top:8px; width:100%">
           Complete settlement on dashboard
