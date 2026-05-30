@@ -6,12 +6,47 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-function isDashboardUrl(url) {
+function isLocalDashboardUrl(url) {
   if (!url) return false;
-  return (
-    url.startsWith(DASHBOARD_URL) ||
-    url.startsWith("http://127.0.0.1:3000")
-  );
+  try {
+    const parsed = new URL(url);
+    return (
+      (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") &&
+      (parsed.pathname === "/" ||
+        parsed.pathname.startsWith("/connect") ||
+        parsed.pathname.startsWith("/#"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function probeDashboardPort(port) {
+  const base = `http://localhost:${port}`;
+  try {
+    const response = await fetch(`${base}/api/session/history`);
+    return response.ok ? base : null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveDashboardBase() {
+  const stored = await chrome.storage.local.get(["dashboardBaseUrl"]);
+  if (stored.dashboardBaseUrl) {
+    const cached = await probeDashboardPort(new URL(stored.dashboardBaseUrl).port);
+    if (cached) return cached;
+  }
+
+  for (const port of DASHBOARD_PORTS) {
+    const base = await probeDashboardPort(port);
+    if (base) {
+      await chrome.storage.local.set({ dashboardBaseUrl: base });
+      return base;
+    }
+  }
+
+  return DASHBOARD_URL;
 }
 
 function waitForTabReady(tabId) {
@@ -24,7 +59,7 @@ function waitForTabReady(tabId) {
     };
     chrome.tabs.onUpdated.addListener(listener);
     chrome.tabs.get(tabId, (tab) => {
-      if (tab.status === "complete") {
+      if (tab?.status === "complete") {
         chrome.tabs.onUpdated.removeListener(listener);
         resolve();
       }
@@ -32,46 +67,38 @@ function waitForTabReady(tabId) {
   });
 }
 
-function ensureDashboardTab() {
-  return new Promise((resolve) => {
-    const dashboardUrl = `${DASHBOARD_URL}/#session`;
+async function openConnectTab(walletName) {
+  const base = await resolveDashboardBase();
+  const connectUrl = `${base}/connect?wallet=${encodeURIComponent(walletName)}`;
 
-    chrome.tabs.query({}, async (tabs) => {
-      const existing = tabs.find((tab) => isDashboardUrl(tab.url));
+  const tabs = await chrome.tabs.query({});
+  const existingConnect = tabs.find(
+    (tab) =>
+      tab.url &&
+      tab.url.includes("/connect") &&
+      isLocalDashboardUrl(tab.url)
+  );
 
-      if (existing?.id) {
-        chrome.tabs.update(
-          existing.id,
-          { active: true, url: dashboardUrl },
-          async () => {
-            await waitForTabReady(existing.id);
-            resolve(existing.id);
-          }
-        );
-        return;
-      }
-
-      chrome.tabs.create({ url: dashboardUrl, active: true }, async (tab) => {
-        if (!tab?.id) {
-          resolve(null);
-          return;
-        }
-        await waitForTabReady(tab.id);
-        resolve(tab.id);
-      });
+  if (existingConnect?.id) {
+    await chrome.tabs.update(existingConnect.id, {
+      active: true,
+      url: connectUrl,
     });
-  });
+    await waitForTabReady(existingConnect.id);
+    return existingConnect.id;
+  }
+
+  const tab = await chrome.tabs.create({ url: connectUrl, active: true });
+  if (!tab?.id) throw new Error("Could not open connect tab");
+  await waitForTabReady(tab.id);
+  return tab.id;
 }
 
 async function relayConnectWallet(walletName) {
   await chrome.storage.local.set({ pendingWalletConnect: walletName });
-  const tabId = await ensureDashboardTab();
+  const tabId = await openConnectTab(walletName);
 
-  if (!tabId) {
-    throw new Error("Could not open dashboard tab");
-  }
-
-  await new Promise((r) => setTimeout(r, 400));
+  await new Promise((r) => setTimeout(r, 500));
 
   return new Promise((resolve) => {
     chrome.tabs.sendMessage(
@@ -86,6 +113,24 @@ async function relayConnectWallet(walletName) {
       }
     );
   });
+}
+
+async function ensureDashboardTab() {
+  const base = await resolveDashboardBase();
+  const dashboardUrl = `${base}/#session`;
+  const tabs = await chrome.tabs.query({});
+  const existing = tabs.find((tab) => isLocalDashboardUrl(tab.url));
+
+  if (existing?.id) {
+    await chrome.tabs.update(existing.id, { active: true, url: dashboardUrl });
+    await waitForTabReady(existing.id);
+    return existing.id;
+  }
+
+  const tab = await chrome.tabs.create({ url: dashboardUrl, active: true });
+  if (!tab?.id) return null;
+  await waitForTabReady(tab.id);
+  return tab.id;
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -122,6 +167,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         );
       })
       .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+
+  if (message.type === "CLOSE_CONNECT_TAB" && sender.tab?.id) {
+    chrome.tabs.remove(sender.tab.id);
+    sendResponse({ ok: true });
     return true;
   }
 });

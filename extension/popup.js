@@ -41,6 +41,26 @@ let walletState = {
   walletName: null,
 };
 
+let apiBase = API_BASE;
+
+function getApiBase() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(["dashboardBaseUrl"], (result) => {
+      resolve(result.dashboardBaseUrl || API_BASE);
+    });
+  });
+}
+
+function isLocalDevUrl(url) {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
 const regionEmoji = {
   "US East": "🇺🇸",
   "US West": "🇺🇸",
@@ -186,7 +206,7 @@ function connectWallet(walletName) {
       }
 
       walletHint.textContent =
-        "Approve the connection in your wallet popup, then return here.";
+        "Approve in your wallet window (Phantom/MetaMask popup), then return here.";
     }
   );
 }
@@ -281,16 +301,12 @@ function watchWalletState() {
   });
 }
 
-function openDashboardConnect() {
-  const dashboardUrl = `${DASHBOARD_URL}/#session`;
+async function openDashboardConnect() {
+  const base = await getApiBase();
+  const dashboardUrl = `${base}/#session`;
 
   chrome.tabs.query({}, (tabs) => {
-    const existing = tabs.find(
-      (tab) =>
-        tab.url &&
-        (tab.url.startsWith(DASHBOARD_URL) ||
-          tab.url.startsWith("http://127.0.0.1:3000"))
-    );
+    const existing = tabs.find((tab) => isLocalDevUrl(tab.url));
 
     if (existing?.id) {
       chrome.tabs.update(existing.id, { active: true, url: dashboardUrl });
@@ -314,7 +330,8 @@ async function startSession() {
   }
 
   try {
-    const response = await fetch(`${API_BASE}/api/session/start`, {
+    const base = await getApiBase();
+    const response = await fetch(`${base}/api/session/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ selectedNodeId: selectedRelay.id }),
@@ -366,7 +383,8 @@ async function endSession() {
     );
 
     try {
-      const response = await fetch(`${API_BASE}/api/session/end`, {
+      const base = await getApiBase();
+      const response = await fetch(`${base}/api/session/end`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -499,6 +517,9 @@ endSessionButton.addEventListener("click", endSession);
 
 window.addEventListener("DOMContentLoaded", () => {
   if (!Array.isArray(relayNodes)) return;
+  getApiBase().then((base) => {
+    apiBase = base;
+  });
   const best = getBestNode(relayNodes);
   updateRecommendation(best);
   refreshNodeList(relayNodes);
