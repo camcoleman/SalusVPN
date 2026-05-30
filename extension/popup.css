@@ -68,16 +68,10 @@ body {
   gap: 9px;
 }
 
-.shield-icon {
-  flex-shrink: 0;
-}
-
-.wordmark {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: var(--text);
+.logo-img {
+  height: 56px;
+  width: auto;
+  display: block;
 }
 
 /* ── Status pill ───────────────────────────────── */
