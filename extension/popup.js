@@ -165,7 +165,8 @@ function updateWalletUI() {
     walletStatus.textContent = `Connected · ${shortenAddress(walletState.walletPublicKey)}`;
     walletNameEl.textContent = `${walletState.walletName ?? "Wallet"} · Solana Devnet`;
     walletNameEl.style.display = "block";
-    walletHint.textContent = "Wallet connected.";
+    walletHint.textContent =
+      "Wallet linked. Start VPN to sign each session in Phantom.";
     walletButton.textContent = "Disconnect";
     walletButton.hidden = false;
     showWalletPicker(false);
@@ -318,6 +319,34 @@ async function openDashboardConnect() {
   });
 }
 
+function requestSessionSignature() {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tab = tabs[0];
+      chrome.runtime.sendMessage(
+        {
+          type: "SIGN_SESSION_AUTH",
+          walletName: walletState.walletName,
+          relayId: selectedRelay?.id,
+          tabId: tab?.id ?? null,
+          tabUrl: tab?.url ?? null,
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response?.ok) {
+            reject(new Error(response?.error ?? "Signature cancelled."));
+            return;
+          }
+          resolve(response);
+        }
+      );
+    });
+  });
+}
+
 async function startSession() {
   if (!selectedRelay) {
     walletHint.textContent = "Select a relay before starting.";
@@ -327,6 +356,19 @@ async function startSession() {
   if (!isWalletReady()) {
     walletHint.textContent = "Connect a wallet first.";
     showWalletPicker(true);
+    return;
+  }
+
+  sessionButton.disabled = true;
+  walletHint.textContent = `Sign in ${walletState.walletName} to start the VPN session…`;
+
+  try {
+    await requestSessionSignature();
+  } catch (error) {
+    sessionButton.disabled = false;
+    walletHint.textContent =
+      error instanceof Error ? error.message : "Signature required to start.";
+    updateConnectionUI();
     return;
   }
 
@@ -368,6 +410,9 @@ async function startSession() {
   } catch (error) {
     walletHint.textContent =
       error instanceof Error ? error.message : "Failed to start session.";
+    chrome.storage.local.set({ walletSessionSigned: false });
+  } finally {
+    updateConnectionUI();
   }
 }
 
@@ -421,6 +466,8 @@ async function endSession() {
   chrome.storage.local.set({
     sessionActive: false,
     activeSessionId: null,
+    walletSessionSigned: false,
+    walletSessionSignature: null,
   });
 
   updateConnectionUI();

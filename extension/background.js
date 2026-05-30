@@ -196,15 +196,80 @@ async function connectViaDashboard(walletName) {
   );
 }
 
-async function saveWalletState(result) {
+async function saveWalletState(result, tabId) {
   await chrome.storage.local.set({
     walletConnected: true,
     walletPublicKey: result.publicKey,
     walletName: result.walletName,
     walletSyncedAt: new Date().toISOString(),
+    walletConnectTabId: tabId ?? null,
     walletConnecting: null,
     walletConnectError: null,
+    walletSessionSigned: false,
   });
+}
+
+async function injectOnTab(tabId, func, args = []) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["inpage-wallet.js"],
+    world: "MAIN",
+  });
+
+  const [injection] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func,
+    args,
+  });
+
+  return injection?.result;
+}
+
+async function disconnectOnAllTabs(walletName) {
+  const tabs = await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] });
+
+  await Promise.all(
+    tabs.map(async (tab) => {
+      if (!tab.id) return;
+      try {
+        if (walletName) {
+          await injectOnTab(
+            tab.id,
+            async (name) => {
+              if (typeof window.__salusDisconnectWallet === "function") {
+                return window.__salusDisconnectWallet(name);
+              }
+              return { ok: true };
+            },
+            [walletName]
+          );
+        } else {
+          await injectOnTab(tab.id, async () => {
+            if (typeof window.__salusDisconnectAllProviders === "function") {
+              return window.__salusDisconnectAllProviders();
+            }
+            return { ok: true };
+          });
+        }
+      } catch {
+        // Tab may not allow injection (chrome://, etc.)
+      }
+    })
+  );
+}
+
+async function signSessionOnTab(tabId, walletName, challenge) {
+  return injectOnTab(
+    tabId,
+    async (name, msg) => {
+      if (typeof window.__salusSignSessionAuth !== "function") {
+        throw new Error("Wallet signing failed to load.");
+      }
+      return window.__salusSignSessionAuth(name, msg);
+    },
+    [walletName, challenge]
+  );
 }
 
 async function connectWalletViaProvider(walletName, tabId, tabUrl) {
@@ -218,8 +283,9 @@ async function connectWalletViaProvider(walletName, tabId, tabUrl) {
   let result;
   let lastError;
 
+  let targetTabId;
   try {
-    const targetTabId = await resolveConnectTabId(tabId, tabUrl);
+    targetTabId = await resolveConnectTabId(tabId, tabUrl);
     result = await injectWalletConnect(targetTabId, walletName);
   } catch (err) {
     lastError = err;
@@ -245,47 +311,83 @@ async function connectWalletViaProvider(walletName, tabId, tabUrl) {
     throw new Error(message);
   }
 
-  await saveWalletState(result);
+  await saveWalletState(result, targetTabId);
   return { ok: true, ...result };
 }
 
 async function disconnectWalletViaProvider() {
-  const stored = await chrome.storage.local.get(["walletName"]);
+  const stored = await chrome.storage.local.get([
+    "walletName",
+    "walletConnectTabId",
+  ]);
   const walletName = stored.walletName;
 
-  if (walletName) {
-    try {
-      const tabId = await resolveConnectTabId(null, null);
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        files: ["inpage-wallet.js"],
-        world: "MAIN",
-      });
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        world: "MAIN",
-        func: async (name) => {
-          if (typeof window.__salusDisconnectWallet === "function") {
-            return window.__salusDisconnectWallet(name);
-          }
-          return { ok: true };
-        },
-        args: [walletName],
-      });
-    } catch {
-      // Clear local state even if provider disconnect fails.
-    }
-  }
+  await disconnectOnAllTabs(walletName);
 
   await chrome.storage.local.set({
     walletConnected: false,
     walletPublicKey: null,
     walletName: null,
+    walletConnectTabId: null,
     walletConnecting: null,
     walletConnectError: null,
+    walletSessionSigned: false,
+    walletSessionSignature: null,
   });
 
   return { ok: true };
+}
+
+async function signSessionAuth(walletName, relayId, tabId, tabUrl) {
+  const stored = await chrome.storage.local.get([
+    "walletName",
+    "walletConnectTabId",
+    "walletPublicKey",
+  ]);
+
+  const name = walletName ?? stored.walletName;
+  if (!name) {
+    throw new Error("Connect a wallet before starting a session.");
+  }
+
+  showConnectNotification(name);
+
+  let targetTabId =
+    stored.walletConnectTabId ??
+    (tabId && isInjectableUrl(tabUrl) ? tabId : null);
+
+  if (targetTabId) {
+    try {
+      await chrome.tabs.get(targetTabId);
+    } catch {
+      targetTabId = null;
+    }
+  }
+
+  if (!targetTabId) {
+    targetTabId = await resolveConnectTabId(tabId, tabUrl);
+  }
+
+  const challenge = [
+    "SalusVPN — Authorize VPN Session",
+    `Relay: ${relayId}`,
+    `Wallet: ${stored.walletPublicKey ?? "unknown"}`,
+    `Time: ${new Date().toISOString()}`,
+  ].join("\n");
+
+  const result = await signSessionOnTab(targetTabId, name, challenge);
+
+  if (!result?.signature?.length) {
+    throw new Error("Session signature was cancelled or failed.");
+  }
+
+  await chrome.storage.local.set({
+    walletSessionSigned: true,
+    walletSessionSignature: result.signature,
+    walletSessionSignedAt: new Date().toISOString(),
+  });
+
+  return { ok: true, publicKey: result.publicKey };
 }
 
 async function ensureDashboardTab() {
@@ -330,6 +432,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     disconnectWalletViaProvider()
       .then((result) => sendResponse(result))
       .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+
+  if (message.type === "SIGN_SESSION_AUTH") {
+    signSessionAuth(
+      message.walletName,
+      message.relayId,
+      message.tabId,
+      message.tabUrl
+    )
+      .then((result) => sendResponse(result))
+      .catch((err) =>
+        sendResponse({
+          ok: false,
+          error: err instanceof Error ? err.message : "Sign failed",
+        })
+      );
     return true;
   }
 
