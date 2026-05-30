@@ -54,6 +54,20 @@ function getApiBase() {
   });
 }
 
+async function parseJsonResponse(response) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    const hint =
+      text.includes("Internal Server Error") || response.status >= 500
+        ? "Dashboard server error — stop other dev servers, run: rm -rf .next && npm run dev"
+        : text.slice(0, 200);
+    throw new Error(hint);
+  }
+}
+
 function isLocalDevUrl(url) {
   if (!url) return false;
   try {
@@ -391,11 +405,11 @@ async function startSession() {
     });
 
     if (!response.ok) {
-      const data = await response.json();
+      const data = await parseJsonResponse(response);
       throw new Error(data.error || "Failed to start session");
     }
 
-    const data = await response.json();
+    const data = await parseJsonResponse(response);
     activeSessionId = data.sessionId;
     sessionActive = true;
     sessionSeconds = 0;
@@ -500,7 +514,7 @@ async function runSettlement(sessionId) {
       }),
     });
 
-    const buildData = await buildResponse.json();
+    const buildData = await parseJsonResponse(buildResponse);
     if (!buildResponse.ok) {
       throw new Error(buildData.error || "Could not build settlement transaction.");
     }
@@ -518,7 +532,7 @@ async function runSettlement(sessionId) {
     });
 
     if (!settleResponse.ok) {
-      const settleData = await settleResponse.json();
+      const settleData = await parseJsonResponse(settleResponse);
       throw new Error(settleData.error || "Failed to record settlement.");
     }
 
@@ -574,7 +588,7 @@ async function endSession() {
       });
 
       if (!response.ok) {
-        const data = await response.json();
+        const data = await parseJsonResponse(response);
         throw new Error(data.error || "Failed to end session");
       }
 
