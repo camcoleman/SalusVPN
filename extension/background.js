@@ -6,6 +6,11 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
+function isInjectableUrl(url) {
+  if (!url) return false;
+  return url.startsWith("http://") || url.startsWith("https://");
+}
+
 function isLocalDashboardUrl(url) {
   if (!url) return false;
   try {
@@ -34,7 +39,8 @@ async function probeDashboardPort(port) {
 async function resolveDashboardBase() {
   const stored = await chrome.storage.local.get(["dashboardBaseUrl"]);
   if (stored.dashboardBaseUrl) {
-    const cached = await probeDashboardPort(new URL(stored.dashboardBaseUrl).port);
+    const port = new URL(stored.dashboardBaseUrl).port || "3000";
+    const cached = await probeDashboardPort(port);
     if (cached) return cached;
   }
 
@@ -67,52 +73,120 @@ function waitForTabReady(tabId) {
   });
 }
 
-async function openConnectTab(walletName) {
-  const base = await resolveDashboardBase();
-  const connectUrl = `${base}/connect?wallet=${encodeURIComponent(walletName)}`;
+async function findInjectableTab() {
+  const [active] = await chrome.tabs.query({
+    active: true,
+    lastFocusedWindow: true,
+  });
 
-  const tabs = await chrome.tabs.query({});
-  const existingConnect = tabs.find(
-    (tab) =>
-      tab.url &&
-      tab.url.includes("/connect") &&
-      isLocalDashboardUrl(tab.url)
-  );
-
-  if (existingConnect?.id) {
-    await chrome.tabs.update(existingConnect.id, {
-      active: true,
-      url: connectUrl,
-    });
-    await waitForTabReady(existingConnect.id);
-    return existingConnect.id;
+  if (active?.id && isInjectableUrl(active.url)) {
+    return { tabId: active.id, created: false };
   }
 
-  const tab = await chrome.tabs.create({ url: connectUrl, active: true });
-  if (!tab?.id) throw new Error("Could not open connect tab");
+  const candidates = await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] });
+  const preferred = candidates.find(
+    (tab) =>
+      tab.id &&
+      isInjectableUrl(tab.url) &&
+      !tab.url.includes("chrome.google.com/webstore")
+  );
+
+  if (preferred?.id) {
+    await chrome.tabs.update(preferred.id, { active: true });
+    return { tabId: preferred.id, created: false };
+  }
+
+  const tab = await chrome.tabs.create({
+    url: "https://solana.com",
+    active: false,
+  });
+
+  if (!tab?.id) throw new Error("Could not open a page for wallet connection.");
+
   await waitForTabReady(tab.id);
-  return tab.id;
+  return { tabId: tab.id, created: true };
 }
 
-async function relayConnectWallet(walletName) {
-  await chrome.storage.local.set({ pendingWalletConnect: walletName });
-  const tabId = await openConnectTab(walletName);
-
-  await new Promise((r) => setTimeout(r, 500));
-
-  return new Promise((resolve) => {
-    chrome.tabs.sendMessage(
-      tabId,
-      { type: "CONNECT_WALLET", walletName },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          resolve({ ok: true, deferred: true });
-          return;
-        }
-        resolve(response ?? { ok: true });
-      }
-    );
+async function saveWalletState(result) {
+  await chrome.storage.local.set({
+    walletConnected: true,
+    walletPublicKey: result.publicKey,
+    walletName: result.walletName,
+    walletSyncedAt: new Date().toISOString(),
   });
+}
+
+async function connectWalletViaProvider(walletName) {
+  const { tabId } = await findInjectableTab();
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["inpage-wallet.js"],
+    world: "MAIN",
+  });
+
+  const [injection] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: async (name) => {
+      if (typeof window.__salusConnectWallet !== "function") {
+        throw new Error("Wallet connector failed to load.");
+      }
+      return window.__salusConnectWallet(name);
+    },
+    args: [walletName],
+  });
+
+  const result = injection?.result;
+  if (!result?.publicKey) {
+    throw new Error("Wallet connection was cancelled or failed.");
+  }
+
+  await saveWalletState(result);
+  return { ok: true, ...result };
+}
+
+async function disconnectWalletViaProvider() {
+  const stored = await chrome.storage.local.get(["walletName"]);
+  const walletName = stored.walletName;
+  if (!walletName) {
+    await chrome.storage.local.set({
+      walletConnected: false,
+      walletPublicKey: null,
+      walletName: null,
+    });
+    return { ok: true };
+  }
+
+  try {
+    const { tabId } = await findInjectableTab();
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["inpage-wallet.js"],
+      world: "MAIN",
+    });
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: async (name) => {
+        if (typeof window.__salusDisconnectWallet === "function") {
+          return window.__salusDisconnectWallet(name);
+        }
+        return { ok: true };
+      },
+      args: [walletName],
+    });
+  } catch {
+    // Still clear local state if provider disconnect fails.
+  }
+
+  await chrome.storage.local.set({
+    walletConnected: false,
+    walletPublicKey: null,
+    walletName: null,
+  });
+
+  return { ok: true };
 }
 
 async function ensureDashboardTab() {
@@ -142,7 +216,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "CONNECT_WALLET") {
-    relayConnectWallet(message.walletName)
+    connectWalletViaProvider(message.walletName)
       .then((result) => sendResponse(result))
       .catch((err) =>
         sendResponse({
@@ -154,18 +228,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "DISCONNECT_WALLET") {
-    ensureDashboardTab()
-      .then((tabId) => {
-        if (!tabId) {
-          sendResponse({ ok: false });
-          return;
-        }
-        chrome.tabs.sendMessage(
-          tabId,
-          { type: "DISCONNECT_WALLET" },
-          (response) => sendResponse(response ?? { ok: true })
-        );
-      })
+    disconnectWalletViaProvider()
+      .then((result) => sendResponse(result))
       .catch(() => sendResponse({ ok: false }));
     return true;
   }

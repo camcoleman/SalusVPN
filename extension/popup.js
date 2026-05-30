@@ -173,7 +173,7 @@ function updateWalletUI() {
     walletStatus.textContent = "Not connected";
     walletNameEl.style.display = "none";
     walletHint.textContent =
-      "Choose Phantom, MetaMask, or Solflare to connect.";
+      "Opens your wallet extension to approve (no dashboard tab).";
     walletButton.textContent = "Connect Wallet";
     walletButton.hidden = false;
     showWalletPicker(false);
@@ -181,7 +181,7 @@ function updateWalletUI() {
 }
 
 function connectWallet(walletName) {
-  walletHint.textContent = `Opening ${walletName}…`;
+  walletHint.textContent = `Check the ${walletName} popup to approve…`;
   walletPicker.querySelectorAll(".wallet-option").forEach((btn) => {
     btn.disabled = true;
   });
@@ -205,19 +205,27 @@ function connectWallet(walletName) {
         return;
       }
 
+      if (response?.publicKey) {
+        walletState = {
+          walletConnected: true,
+          walletPublicKey: response.publicKey,
+          walletName: response.walletName ?? walletName,
+        };
+        updateWalletUI();
+        updateConnectionUI();
+        walletHint.textContent = "Wallet connected.";
+        return;
+      }
+
+      loadWalletState();
       walletHint.textContent =
-        "Approve in your wallet window (Phantom/MetaMask popup), then return here.";
+        "Approve in the Phantom/MetaMask extension popup, then return here.";
     }
   );
 }
 
 function disconnectWallet() {
   chrome.runtime.sendMessage({ type: "DISCONNECT_WALLET" }, () => {
-    chrome.storage.local.set({
-      walletConnected: false,
-      walletPublicKey: null,
-      walletName: null,
-    });
     loadWalletState();
   });
 }
