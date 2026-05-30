@@ -173,7 +173,7 @@ function updateWalletUI() {
     walletStatus.textContent = "Not connected";
     walletNameEl.style.display = "none";
     walletHint.textContent =
-      "Opens your wallet extension to approve (no dashboard tab).";
+      "Opens your Phantom or MetaMask approval window.";
     walletButton.textContent = "Connect Wallet";
     walletButton.hidden = false;
     showWalletPicker(false);
@@ -181,47 +181,30 @@ function updateWalletUI() {
 }
 
 function connectWallet(walletName) {
-  walletHint.textContent = `Check the ${walletName} popup to approve…`;
+  showWalletPicker(false);
   walletPicker.querySelectorAll(".wallet-option").forEach((btn) => {
     btn.disabled = true;
   });
 
-  chrome.runtime.sendMessage(
-    { type: "CONNECT_WALLET", walletName },
-    (response) => {
-      walletPicker.querySelectorAll(".wallet-option").forEach((btn) => {
-        btn.disabled = false;
-      });
-      showWalletPicker(false);
+  chrome.storage.local.set({
+    walletConnecting: walletName,
+    walletConnectError: null,
+  });
 
-      if (chrome.runtime.lastError) {
-        walletHint.textContent = chrome.runtime.lastError.message;
-        return;
-      }
+  walletHint.textContent = `Look for the ${walletName} icon in your toolbar and approve.`;
 
-      if (response?.ok === false) {
-        walletHint.textContent =
-          response.error ?? "Could not start wallet connection.";
-        return;
-      }
-
-      if (response?.publicKey) {
-        walletState = {
-          walletConnected: true,
-          walletPublicKey: response.publicKey,
-          walletName: response.walletName ?? walletName,
-        };
-        updateWalletUI();
-        updateConnectionUI();
-        walletHint.textContent = "Wallet connected.";
-        return;
-      }
-
-      loadWalletState();
-      walletHint.textContent =
-        "Approve in the Phantom/MetaMask extension popup, then return here.";
-    }
-  );
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const tab = tabs[0];
+    chrome.runtime.sendMessage({
+      type: "CONNECT_WALLET",
+      walletName,
+      tabId: tab?.id ?? null,
+      tabUrl: tab?.url ?? null,
+    });
+    walletPicker.querySelectorAll(".wallet-option").forEach((btn) => {
+      btn.disabled = false;
+    });
+  });
 }
 
 function disconnectWallet() {
@@ -271,6 +254,8 @@ function loadWalletState() {
       "walletConnected",
       "walletPublicKey",
       "walletName",
+      "walletConnecting",
+      "walletConnectError",
       "pendingSettlementSessionId",
     ],
     (result) => {
@@ -281,6 +266,12 @@ function loadWalletState() {
       };
       updateWalletUI();
       updateConnectionUI();
+
+      if (result.walletConnecting && !result.walletConnected) {
+        walletHint.textContent = `Approve the ${result.walletConnecting} popup, then reopen SalusVPN.`;
+      } else if (result.walletConnectError && !result.walletConnected) {
+        walletHint.textContent = result.walletConnectError;
+      }
 
       if (result.pendingSettlementSessionId) {
         settlementMessage.style.display = "block";
@@ -302,7 +293,9 @@ function watchWalletState() {
     if (
       changes.walletConnected ||
       changes.walletPublicKey ||
-      changes.walletName
+      changes.walletName ||
+      changes.walletConnecting ||
+      changes.walletConnectError
     ) {
       loadWalletState();
     }
