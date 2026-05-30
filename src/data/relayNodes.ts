@@ -1,20 +1,9 @@
 import { calculateTrustScore } from "@/lib/trustScore";
+import type { RelayNode } from "@/types/trustAdvisor";
 
-export interface RelayNode {
-  id: string;
-  name: string;
-  region: string;
-  latency: number;
-  trustScore: number;
-  pricePerSession: number;
-  verified: boolean;
-  humanLaneAvailable: boolean;
-  trafficQualityScore: number;
-  botRiskScore: number;
-  uptime: number;
-  lastVerified: string;
-  attestationHash: string;
-}
+// Re-export so existing imports (`import { RelayNode } from "@/data/relayNodes"`)
+// keep working while the interface itself lives in one canonical place.
+export type { RelayNode };
 
 type RawRelayNode = Omit<RelayNode, "trustScore">;
 
