@@ -6,6 +6,9 @@ const walletHint = document.getElementById("wallet-hint");
 const walletPicker = document.getElementById("wallet-picker");
 const walletPickerCancel = document.getElementById("wallet-picker-cancel");
 const settlementMessage = document.getElementById("settlement-message");
+const settlementTxRow = document.getElementById("settlement-tx-row");
+const settlementTxLink = document.getElementById("settlement-tx-link");
+const settleRetryButton = document.getElementById("settle-retry-button");
 const settleDashboardButton = document.getElementById("settle-dashboard-button");
 const recommendedBadge = document.getElementById("recommended-badge");
 const recommendedNode = document.getElementById("recommended-node");
@@ -258,6 +261,9 @@ function loadWalletState() {
       "walletConnecting",
       "walletConnectError",
       "pendingSettlementSessionId",
+      "lastSettlementSignature",
+      "lastSettlementStatus",
+      "settlementError",
     ],
     (result) => {
       walletState = {
@@ -275,13 +281,17 @@ function loadWalletState() {
       }
 
       if (result.pendingSettlementSessionId) {
-        settlementMessage.style.display = "block";
-        settlementMessage.textContent =
-          "Session ended. Complete USDC settlement on the dashboard.";
-        settleDashboardButton.style.display = "block";
+        showSettlementPending(
+          result.settlementError ??
+            "Session ended. Approve USDC payment in your wallet or retry."
+        );
+      } else if (
+        result.lastSettlementSignature &&
+        result.lastSettlementStatus === "settled"
+      ) {
+        showSettlementSuccess(result.lastSettlementSignature);
       } else {
-        settlementMessage.style.display = "none";
-        settleDashboardButton.style.display = "none";
+        clearSettlementUI();
       }
     }
   );
@@ -394,10 +404,12 @@ async function startSession() {
       sessionActive: true,
       activeSessionId: data.sessionId,
       pendingSettlementSessionId: null,
+      lastSettlementSignature: null,
+      lastSettlementStatus: null,
+      settlementError: null,
     });
 
-    settlementMessage.style.display = "none";
-    settleDashboardButton.style.display = "none";
+    clearSettlementUI();
 
     updateConnectionUI();
     updateTimer();
@@ -416,13 +428,133 @@ async function startSession() {
   }
 }
 
+function showSettlementSuccess(signature) {
+  settlementMessage.style.display = "block";
+  settlementMessage.textContent = "Settlement confirmed on devnet.";
+  settlementTxRow.style.display = "block";
+  settlementTxLink.textContent = shortenSignature(signature);
+  settlementTxLink.href = getDevnetExplorerUrl(signature);
+  settleRetryButton.style.display = "none";
+  settleDashboardButton.style.display = "none";
+}
+
+function showSettlementPending(message) {
+  settlementMessage.style.display = "block";
+  settlementMessage.textContent = message;
+  settlementTxRow.style.display = "none";
+  settleRetryButton.style.display = "block";
+  settleDashboardButton.style.display = "block";
+}
+
+function clearSettlementUI() {
+  settlementMessage.style.display = "none";
+  settlementTxRow.style.display = "none";
+  settleRetryButton.style.display = "none";
+  settleDashboardButton.style.display = "none";
+}
+
+function requestSettlementSign(serializedTx) {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tab = tabs[0];
+      chrome.runtime.sendMessage(
+        {
+          type: "SETTLE_SESSION",
+          walletName: walletState.walletName,
+          serializedTx,
+          tabId: tab?.id ?? null,
+          tabUrl: tab?.url ?? null,
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+            return;
+          }
+          if (!response?.ok) {
+            reject(new Error(response?.error ?? "Settlement cancelled."));
+            return;
+          }
+          resolve(response);
+        }
+      );
+    });
+  });
+}
+
+async function runSettlement(sessionId) {
+  if (!isWalletReady()) {
+    showSettlementPending("Connect wallet to settle.");
+    return false;
+  }
+
+  walletHint.textContent = "Approve the USDC payment in your wallet…";
+
+  try {
+    const base = await getApiBase();
+    const buildResponse = await fetch(`${base}/api/session/build-settle-tx`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        walletPublicKey: walletState.walletPublicKey,
+      }),
+    });
+
+    const buildData = await buildResponse.json();
+    if (!buildResponse.ok) {
+      throw new Error(buildData.error || "Could not build settlement transaction.");
+    }
+
+    const signResult = await requestSettlementSign(buildData.transaction);
+
+    const settleResponse = await fetch(`${base}/api/session/settle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        settlementStatus: "settled",
+        transactionSignature: signResult.signature,
+      }),
+    });
+
+    if (!settleResponse.ok) {
+      const settleData = await settleResponse.json();
+      throw new Error(settleData.error || "Failed to record settlement.");
+    }
+
+    await chrome.storage.local.set({
+      pendingSettlementSessionId: null,
+      lastSettlementSignature: signResult.signature,
+      lastSettlementStatus: "settled",
+      lastSettlementSessionId: sessionId,
+      settlementError: null,
+    });
+
+    showSettlementSuccess(signResult.signature);
+    walletHint.textContent = "Payment complete.";
+    return true;
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Settlement failed.";
+    await chrome.storage.local.set({
+      pendingSettlementSessionId: sessionId,
+      settlementError: message,
+    });
+    showSettlementPending(message);
+    walletHint.textContent = message;
+    return false;
+  }
+}
+
 async function endSession() {
   if (sessionInterval) {
     clearInterval(sessionInterval);
     sessionInterval = null;
   }
 
-  if (activeSessionId && selectedRelay) {
+  const endedSessionId = activeSessionId;
+
+  if (endedSessionId && selectedRelay) {
     const metrics = getSessionMetrics(
       sessionSeconds,
       selectedRelay.pricePerSession
@@ -434,7 +566,7 @@ async function endSession() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId: activeSessionId,
+          sessionId: endedSessionId,
           selectedNodeId: selectedRelay.id,
           bandwidthUsedMB: metrics.bandwidthMB,
           accruedCostUSDC: metrics.accruedCostUSDC,
@@ -446,18 +578,22 @@ async function endSession() {
         throw new Error(data.error || "Failed to end session");
       }
 
+      sessionActive = false;
+      activeSessionId = null;
       chrome.storage.local.set({
-        pendingSettlementSessionId: activeSessionId,
+        sessionActive: false,
+        activeSessionId: null,
+        walletSessionSigned: false,
+        walletSessionSignature: null,
       });
+      updateConnectionUI();
 
-      settlementMessage.style.display = "block";
-      settlementMessage.textContent =
-        "Session ended. Open dashboard to complete USDC settlement.";
-      settleDashboardButton.style.display = "block";
+      await runSettlement(endedSessionId);
     } catch (error) {
       walletHint.textContent =
         error instanceof Error ? error.message : "Failed to end session.";
     }
+    return;
   }
 
   sessionActive = false;
@@ -557,6 +693,13 @@ walletPicker.querySelectorAll(".wallet-option").forEach((button) => {
   });
 });
 settleDashboardButton.addEventListener("click", openDashboardConnect);
+settleRetryButton.addEventListener("click", () => {
+  chrome.storage.local.get(["pendingSettlementSessionId"], (result) => {
+    if (result.pendingSettlementSessionId) {
+      runSettlement(result.pendingSettlementSessionId);
+    }
+  });
+});
 sessionButton.addEventListener("click", startSession);
 useRecommendationBtn.addEventListener("click", () =>
   setSelectedNode(getBestNode(relayNodes))

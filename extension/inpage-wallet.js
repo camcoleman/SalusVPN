@@ -245,3 +245,70 @@ window.__salusSignSessionAuth = async function salusSignSessionAuth(
 
   throw new Error(`Unsupported wallet: ${walletName}`);
 };
+
+window.__salusSignAndSendTransaction = async function salusSignAndSendTransaction(
+  serializedTxBase64,
+  walletName
+) {
+  if (!window.solanaWeb3?.Transaction) {
+    throw new Error("Solana library failed to load on this page.");
+  }
+
+  const binary = atob(serializedTxBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  const transaction = window.solanaWeb3.Transaction.from(bytes);
+
+  if (walletName === "Phantom") {
+    const provider = window.phantom?.solana;
+    if (!provider?.isPhantom) {
+      throw new Error("Phantom is not installed.");
+    }
+    if (!provider.isConnected) {
+      await provider.connect({ onlyIfTrusted: false });
+    }
+    const response = await provider.signAndSendTransaction(transaction);
+    const signature =
+      typeof response === "string" ? response : response?.signature;
+    if (!signature) {
+      throw new Error("Phantom did not return a transaction signature.");
+    }
+    return { signature };
+  }
+
+  if (walletName === "Solflare") {
+    const provider = window.solflare;
+    if (!provider?.isSolflare) {
+      throw new Error("Solflare is not installed.");
+    }
+    if (!provider.isConnected) {
+      await provider.connect();
+    }
+    const response = await provider.signAndSendTransaction(transaction);
+    const signature =
+      typeof response === "string" ? response : response?.signature;
+    if (!signature) {
+      throw new Error("Solflare did not return a transaction signature.");
+    }
+    return { signature };
+  }
+
+  if (walletName === "MetaMask") {
+    const metamask = salusGetMetaMaskProvider();
+    if (!metamask?.solana?.signAndSendTransaction) {
+      throw new Error("MetaMask Solana signing is not available.");
+    }
+    const response = await metamask.solana.signAndSendTransaction(transaction);
+    const signature =
+      typeof response === "string" ? response : response?.signature;
+    if (!signature) {
+      throw new Error("MetaMask did not return a transaction signature.");
+    }
+    return { signature };
+  }
+
+  throw new Error(`Unsupported wallet: ${walletName}`);
+};

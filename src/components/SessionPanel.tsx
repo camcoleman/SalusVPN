@@ -158,6 +158,11 @@ export default function SessionPanel({ selectedNode }: SessionPanelProps) {
         sendTransaction
       );
 
+      if (result.status === "failed") {
+        setError(result.error ?? "Settlement failed.");
+        return;
+      }
+
       const finalSettlementStatus: SettlementStatus =
         result.status === "settled" && result.signature ? "settled" : "simulated";
 
@@ -288,7 +293,7 @@ export default function SessionPanel({ selectedNode }: SessionPanelProps) {
       setStatus("ended");
       setSettlementStatus("pending");
 
-      let finalSettlementStatus: SettlementStatus = "simulated";
+      let finalSettlementStatus: SettlementStatus = "failed";
       let finalSignature: string | undefined;
 
       if (connected && publicKey && sendTransaction) {
@@ -306,14 +311,25 @@ export default function SessionPanel({ selectedNode }: SessionPanelProps) {
           setSettlementMessage(
             "Prototype USDC settlement transaction confirmed."
           );
+        } else if (result.status === "failed") {
+          finalSettlementStatus = "failed";
+          setSettlementStatus("failed");
+          setSettlementMessage(result.error ?? "Settlement failed.");
+          setError(result.error ?? "Settlement failed.");
         } else {
           finalSettlementStatus = "simulated";
           setSettlementStatus("simulated");
           setSettlementMessage("Prototype settlement simulated.");
         }
       } else {
+        finalSettlementStatus = "simulated";
         setSettlementStatus("simulated");
-        setSettlementMessage("Prototype settlement simulated.");
+        setSettlementMessage("Connect wallet to settle on-chain.");
+      }
+
+      if (finalSettlementStatus === "failed") {
+        window.dispatchEvent(new CustomEvent("session-updated"));
+        return;
       }
 
       await fetch("/api/session/settle", {

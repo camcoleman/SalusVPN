@@ -390,6 +390,44 @@ async function signSessionAuth(walletName, relayId, tabId, tabUrl) {
   return { ok: true, publicKey: result.publicKey };
 }
 
+async function injectSettlement(tabId, walletName, serializedTx) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["vendor/solana-web3.iife.min.js", "inpage-wallet.js"],
+    world: "MAIN",
+  });
+
+  const [injection] = await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    func: async (name, tx) => {
+      if (typeof window.__salusSignAndSendTransaction !== "function") {
+        throw new Error("Settlement signer failed to load.");
+      }
+      return window.__salusSignAndSendTransaction(tx, name);
+    },
+    args: [walletName, serializedTx],
+  });
+
+  const result = injection?.result;
+  if (!result?.signature) {
+    throw new Error("Settlement transaction was cancelled or failed.");
+  }
+
+  return result;
+}
+
+async function settleSessionOnTab(tabId, walletName, serializedTx) {
+  return injectSettlement(tabId, walletName, serializedTx);
+}
+
+async function settleSessionViaProvider(walletName, serializedTx, tabId, tabUrl) {
+  showConnectNotification(walletName);
+
+  const targetTabId = await resolveConnectTabId(tabId, tabUrl);
+  return settleSessionOnTab(targetTabId, walletName, serializedTx);
+}
+
 async function ensureDashboardTab() {
   const base = await resolveDashboardBase();
   const dashboardUrl = `${base}/#session`;
@@ -447,6 +485,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({
           ok: false,
           error: err instanceof Error ? err.message : "Sign failed",
+        })
+      );
+    return true;
+  }
+
+  if (message.type === "SETTLE_SESSION") {
+    settleSessionViaProvider(
+      message.walletName,
+      message.serializedTx,
+      message.tabId,
+      message.tabUrl
+    )
+      .then((result) => sendResponse({ ok: true, ...result }))
+      .catch((err) =>
+        sendResponse({
+          ok: false,
+          error: err instanceof Error ? err.message : "Settlement failed",
         })
       );
     return true;

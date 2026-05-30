@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { WalletReadyState, type WalletName } from "@solana/wallet-adapter-base";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import { getUsdcBalance } from "@/lib/settlement";
+import { getSolBalance, getUsdcBalance } from "@/lib/settlement";
 import { SUPPORTED_WALLET_HINTS } from "@/lib/wallets";
 
 function shortenAddress(address: string): string {
@@ -34,6 +34,7 @@ export default function WalletConnect() {
 
   const [error, setError] = useState<string | null>(null);
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
+  const [solBalance, setSolBalance] = useState<number | null>(null);
   const [pendingWalletName, setPendingWalletName] =
     useState<WalletName | null>(null);
 
@@ -73,14 +74,21 @@ export default function WalletConnect() {
   useEffect(() => {
     if (!connected || !publicKey) {
       setUsdcBalance(null);
+      setSolBalance(null);
       return;
     }
 
     let cancelled = false;
 
     async function loadBalance() {
-      const balance = await getUsdcBalance(connection, publicKey!);
-      if (!cancelled) setUsdcBalance(balance);
+      const [usdc, sol] = await Promise.all([
+        getUsdcBalance(connection, publicKey!),
+        getSolBalance(connection, publicKey!),
+      ]);
+      if (!cancelled) {
+        setUsdcBalance(usdc);
+        setSolBalance(sol);
+      }
     }
 
     loadBalance();
@@ -123,25 +131,42 @@ export default function WalletConnect() {
             Solana Devnet
           </span>
         </div>
-        {usdcBalance !== null && (
+        {solBalance !== null && (
           <p className="mt-2 text-xs text-muted">
+            Devnet SOL:{" "}
+            <span className="font-medium text-foreground">
+              {solBalance.toFixed(4)}
+            </span>
+          </p>
+        )}
+        {usdcBalance !== null && (
+          <p className="mt-1 text-xs text-muted">
             Devnet USDC:{" "}
             <span className="font-medium text-foreground">
               {usdcBalance.toFixed(4)}
             </span>
           </p>
         )}
-        <p className="mt-1 text-xs text-muted">
-          Need devnet USDC? Use the{" "}
+        <p className="mt-2 text-xs text-muted">
+          Use{" "}
+          <a
+            href="https://faucet.solana.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent underline-offset-2 hover:underline"
+          >
+            faucet.solana.com
+          </a>{" "}
+          for devnet SOL and{" "}
           <a
             href="https://spl-token-faucet.com/"
             target="_blank"
             rel="noopener noreferrer"
             className="text-accent underline-offset-2 hover:underline"
           >
-            SPL token faucet
-          </a>
-          .
+            spl-token-faucet.com
+          </a>{" "}
+          for devnet USDC. Testnet funds will not work.
         </p>
         <button
           type="button"
@@ -157,8 +182,8 @@ export default function WalletConnect() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted">
-        Connect with Phantom, MetaMask, Solflare, Coinbase Wallet, Trust, or
-        other Solana-compatible wallets.
+        Switch your wallet to <strong>Solana Devnet</strong> before connecting.
+        Connect with Phantom, MetaMask, Solflare, or other Solana wallets.
       </p>
 
       {hasAnyWallet ? (
