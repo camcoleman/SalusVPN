@@ -2,16 +2,85 @@ importScripts("config.js");
 
 const BRIDGE_PAGE_URL = "https://solana.com";
 
+let sessionTickInterval = null;
+
+function stopSessionTicker() {
+  if (sessionTickInterval) {
+    clearInterval(sessionTickInterval);
+    sessionTickInterval = null;
+  }
+}
+
+function startSessionTicker() {
+  if (sessionTickInterval) return;
+
+  sessionTickInterval = setInterval(() => {
+    chrome.storage.local.get(["sessionActive", "sessionSeconds"], (result) => {
+      if (!result.sessionActive) {
+        stopSessionTicker();
+        return;
+      }
+
+      chrome.storage.local.set({
+        sessionSeconds: (result.sessionSeconds ?? 0) + 1,
+      });
+    });
+  }, 1000);
+}
+
+function syncSessionTicker() {
+  chrome.storage.local.get(["sessionActive"], (result) => {
+    if (result.sessionActive) startSessionTicker();
+    else stopSessionTicker();
+  });
+}
+
+async function openSessionSidePanel() {
+  try {
+    await chrome.sidePanel.setOptions({
+      path: "sidepanel.html",
+      enabled: true,
+    });
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (tab?.windowId) {
+      await chrome.sidePanel.open({ windowId: tab.windowId });
+    }
+  } catch (error) {
+    console.warn("SalusVPN: could not open side panel.", error);
+  }
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local" || !changes.sessionActive) return;
+
+  if (changes.sessionActive.newValue) {
+    startSessionTicker();
+    void openSessionSidePanel();
+  } else {
+    stopSessionTicker();
+  }
+});
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({ selectedRelay: null }, () => {
     console.log("SalusVPN extension installed and storage initialized.");
   });
   void sanitizeWalletConnectTabId();
+  syncSessionTicker();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   void sanitizeWalletConnectTabId();
+  syncSessionTicker();
 });
+
+void syncSessionTicker();
+
+try {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+} catch {
+  // sidePanel API unavailable in older Chrome builds
+}
 
 function isInjectableUrl(url) {
   if (!url) return false;
@@ -496,6 +565,11 @@ async function ensureDashboardTab() {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "OPEN_SESSION_HUD") {
+    void openSessionSidePanel().then(() => sendResponse({ ok: true }));
+    return true;
+  }
+
   if (message.type === "getSelectedRelay") {
     chrome.storage.local.get(["selectedRelay"], (result) => {
       sendResponse({ selectedRelay: result.selectedRelay ?? null });

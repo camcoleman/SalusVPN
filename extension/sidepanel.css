@@ -1,0 +1,147 @@
+:root {
+  --bg: #1a1410;
+  --surface: #221a11;
+  --border: #3a2e22;
+  --accent: #c9773a;
+  --text: #f0e6d3;
+  --text-muted: #8a7060;
+  --green: #5ec97a;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "DM Sans", -apple-system, system-ui, sans-serif;
+  color-scheme: dark;
+  min-height: 100vh;
+}
+
+.hud {
+  padding: 10px 12px;
+}
+
+.hud-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.hud-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.hud--active .hud-dot {
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(94, 201, 122, 0.6);
+}
+
+.hud-relay {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-minimize {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.hud-minimize:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.hud-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.hud-stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+}
+
+.hud-val {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-lbl {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.hud-hint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.hud--minimized .hud-body .hud-metrics {
+  grid-template-columns: 1fr 1fr;
+}
+
+.hud--minimized .hud-stat:nth-child(n + 3),
+.hud--minimized .hud-hint {
+  display: none;
+}
+
+.hud--minimized {
+  padding: 8px 10px;
+}
+
+.hud--minimized .hud-header {
+  margin-bottom: 6px;
+}
+
+.hud--minimized .hud-val {
+  font-size: 15px;
+}
+
+.hud--idle .hud-dot {
+  background: var(--text-muted);
+}
+
+.trust-green {
+  color: var(--green);
+}
+
+.trust-yellow {
+  color: #e6c84a;
+}
+
+.trust-red {
+  color: #e06c6c;
+}

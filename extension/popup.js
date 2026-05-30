@@ -36,7 +36,6 @@ const heroLatency = document.getElementById("hero-latency");
 let selectedRelay = null;
 let sessionActive = false;
 let sessionSeconds = 0;
-let sessionInterval = null;
 let activeSessionId = null;
 
 let walletState = {
@@ -72,10 +71,6 @@ async function parseJsonResponse(response) {
 function clearLocalSession() {
   sessionActive = false;
   activeSessionId = null;
-  if (sessionInterval) {
-    clearInterval(sessionInterval);
-    sessionInterval = null;
-  }
   chrome.storage.local.set({
     sessionActive: false,
     activeSessionId: null,
@@ -332,7 +327,6 @@ function updateTimer() {
 
   sessionLiveCost.textContent = formatCurrency(liveCost);
   footerCost.textContent = formatCurrency(liveCost);
-  chrome.storage.local.set({ sessionSeconds });
 }
 
 function loadWalletState() {
@@ -392,6 +386,22 @@ function watchWalletState() {
       changes.walletConnectError
     ) {
       loadWalletState();
+    }
+  });
+}
+
+function watchSessionState() {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+
+    if (changes.sessionSeconds) {
+      sessionSeconds = changes.sessionSeconds.newValue ?? 0;
+      updateTimer();
+    }
+
+    if (changes.sessionActive) {
+      sessionActive = Boolean(changes.sessionActive.newValue);
+      updateConnectionUI();
     }
   });
 }
@@ -483,22 +493,25 @@ async function startSession() {
     chrome.storage.local.set({
       sessionActive: true,
       activeSessionId: data.sessionId,
+      sessionSeconds: 0,
+      sessionHud: {
+        relayName: selectedRelay.name,
+        trustScore: selectedRelay.trustScore,
+        latency: selectedRelay.latency,
+        pricePerSession: selectedRelay.pricePerSession,
+      },
       pendingSettlementSessionId: null,
       lastSettlementSignature: null,
       lastSettlementStatus: null,
       settlementError: null,
     });
 
+    chrome.runtime.sendMessage({ type: "OPEN_SESSION_HUD" });
+
     clearSettlementUI();
 
     updateConnectionUI();
     updateTimer();
-
-    if (sessionInterval) clearInterval(sessionInterval);
-    sessionInterval = setInterval(() => {
-      sessionSeconds += 1;
-      updateTimer();
-    }, 1000);
   } catch (error) {
     walletHint.textContent =
       error instanceof Error ? error.message : "Failed to start session.";
@@ -624,11 +637,6 @@ async function runSettlement(sessionId) {
 }
 
 async function endSession() {
-  if (sessionInterval) {
-    clearInterval(sessionInterval);
-    sessionInterval = null;
-  }
-
   const endedSessionId = activeSessionId;
 
   if (endedSessionId && selectedRelay) {
@@ -780,21 +788,7 @@ function restoreState(nodes) {
       }
 
       updateConnectionUI();
-
-      if (sessionActive && isWalletReady()) {
-        if (sessionInterval) clearInterval(sessionInterval);
-        sessionInterval = setInterval(() => {
-          sessionSeconds += 1;
-          updateTimer();
-        }, 1000);
-        updateTimer();
-      } else if (sessionActive) {
-        sessionActive = false;
-        chrome.storage.local.set({ sessionActive: false });
-        updateConnectionUI();
-      } else {
-        updateTimer();
-      }
+      updateTimer();
     }
   );
 }
@@ -830,5 +824,6 @@ window.addEventListener("DOMContentLoaded", () => {
   refreshNodeList(relayNodes);
   loadWalletState();
   watchWalletState();
+  watchSessionState();
   restoreState(relayNodes);
 });

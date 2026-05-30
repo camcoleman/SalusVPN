@@ -22,7 +22,10 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["storage", "tabs", "scripting", "activeTab", "notifications"],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "permissions": ["storage", "tabs", "scripting", "activeTab", "notifications", "sidePanel"],
   "host_permissions": [
     "http://*/*",
     "https://*/*"

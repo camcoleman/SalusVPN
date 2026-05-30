@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SalusVPN Session</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <div id="hud" class="hud hud--idle">
+      <header class="hud-header">
+        <span id="hud-status-dot" class="hud-dot"></span>
+        <span id="hud-relay" class="hud-relay">No session</span>
+        <button id="hud-minimize" class="hud-minimize" type="button" title="Minimize">−</button>
+      </header>
+
+      <div id="hud-body" class="hud-body">
+        <div class="hud-metrics">
+          <div class="hud-stat">
+            <span id="hud-time" class="hud-val">00:00</span>
+            <span class="hud-lbl">Time</span>
+          </div>
+          <div class="hud-stat">
+            <span id="hud-cost" class="hud-val">$0.0000</span>
+            <span class="hud-lbl">Cost</span>
+          </div>
+          <div class="hud-stat">
+            <span id="hud-trust" class="hud-val">—</span>
+            <span class="hud-lbl">Trust</span>
+          </div>
+          <div class="hud-stat">
+            <span id="hud-latency" class="hud-val">—</span>
+            <span class="hud-lbl">Latency</span>
+          </div>
+        </div>
+        <p id="hud-hint" class="hud-hint">Start a session from the SalusVPN popup.</p>
+      </div>
+    </div>
+
+    <script src="session.js"></script>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>
