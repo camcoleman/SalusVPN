@@ -3,6 +3,8 @@ const walletButton = document.getElementById("wallet-button");
 const walletStatus = document.getElementById("wallet-status");
 const walletNameEl = document.getElementById("wallet-name");
 const walletHint = document.getElementById("wallet-hint");
+const walletPicker = document.getElementById("wallet-picker");
+const walletPickerCancel = document.getElementById("wallet-picker-cancel");
 const settlementMessage = document.getElementById("settlement-message");
 const settleDashboardButton = document.getElementById("settle-dashboard-button");
 const recommendedBadge = document.getElementById("recommended-badge");
@@ -133,20 +135,79 @@ function updateSelectedDetails() {
   selectedDetails.textContent = `Verified ${formatAge(selectedRelay.lastVerified)} · Hash ${formatShortHash(selectedRelay.attestationHash)} · ${selectedRelay.humanLaneAvailable ? "Human lane" : "Standard lane"} · Bot risk ${selectedRelay.botRiskScore}%`;
 }
 
+function showWalletPicker(show) {
+  walletPicker.hidden = !show;
+  walletButton.hidden = show;
+}
+
 function updateWalletUI() {
   if (isWalletReady()) {
     walletStatus.textContent = `Connected · ${shortenAddress(walletState.walletPublicKey)}`;
     walletNameEl.textContent = `${walletState.walletName ?? "Wallet"} · Solana Devnet`;
     walletNameEl.style.display = "block";
-    walletHint.textContent = "Wallet synced from dashboard.";
-    walletButton.textContent = "Open Dashboard";
+    walletHint.textContent = "Wallet connected.";
+    walletButton.textContent = "Disconnect";
+    walletButton.hidden = false;
+    showWalletPicker(false);
   } else {
     walletStatus.textContent = "Not connected";
     walletNameEl.style.display = "none";
     walletHint.textContent =
-      "Connect wallet on the dashboard to start a session.";
-    walletButton.textContent = "Open Dashboard to Connect";
+      "Choose Phantom, MetaMask, or Solflare to connect.";
+    walletButton.textContent = "Connect Wallet";
+    walletButton.hidden = false;
+    showWalletPicker(false);
   }
+}
+
+function connectWallet(walletName) {
+  walletHint.textContent = `Opening ${walletName}…`;
+  walletPicker.querySelectorAll(".wallet-option").forEach((btn) => {
+    btn.disabled = true;
+  });
+
+  chrome.runtime.sendMessage(
+    { type: "CONNECT_WALLET", walletName },
+    (response) => {
+      walletPicker.querySelectorAll(".wallet-option").forEach((btn) => {
+        btn.disabled = false;
+      });
+      showWalletPicker(false);
+
+      if (chrome.runtime.lastError) {
+        walletHint.textContent = chrome.runtime.lastError.message;
+        return;
+      }
+
+      if (response?.ok === false) {
+        walletHint.textContent =
+          response.error ?? "Could not start wallet connection.";
+        return;
+      }
+
+      walletHint.textContent =
+        "Approve the connection in your wallet popup, then return here.";
+    }
+  );
+}
+
+function disconnectWallet() {
+  chrome.runtime.sendMessage({ type: "DISCONNECT_WALLET" }, () => {
+    chrome.storage.local.set({
+      walletConnected: false,
+      walletPublicKey: null,
+      walletName: null,
+    });
+    loadWalletState();
+  });
+}
+
+function handleWalletButtonClick() {
+  if (isWalletReady()) {
+    disconnectWallet();
+    return;
+  }
+  showWalletPicker(true);
 }
 
 function updateConnectionUI() {
@@ -247,8 +308,8 @@ async function startSession() {
   }
 
   if (!isWalletReady()) {
-    walletHint.textContent = "Connect wallet on dashboard first.";
-    openDashboardConnect();
+    walletHint.textContent = "Connect a wallet first.";
+    showWalletPicker(true);
     return;
   }
 
@@ -422,7 +483,13 @@ function restoreState(nodes) {
   );
 }
 
-walletButton.addEventListener("click", openDashboardConnect);
+walletButton.addEventListener("click", handleWalletButtonClick);
+walletPickerCancel.addEventListener("click", () => showWalletPicker(false));
+walletPicker.querySelectorAll(".wallet-option").forEach((button) => {
+  button.addEventListener("click", () => {
+    connectWallet(button.dataset.wallet);
+  });
+});
 settleDashboardButton.addEventListener("click", openDashboardConnect);
 sessionButton.addEventListener("click", startSession);
 useRecommendationBtn.addEventListener("click", () =>
