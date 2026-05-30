@@ -185,12 +185,13 @@ body {
 .btn--primary {
   background: var(--accent);
   color: #fff;
+  box-shadow: 0 0 10px rgba(201, 119, 58, 0.35);
 }
 
 .btn--ghost {
-  background: var(--surface-2);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(201, 119, 58, 0.35);
 }
 
 .btn--danger {
