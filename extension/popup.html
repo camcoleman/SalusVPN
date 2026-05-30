@@ -10,83 +10,79 @@
     <div class="popup">
 
       <header class="header">
-        <span class="wordmark">SalusVPN</span>
-        <div class="header-right">
-          <span id="connect-pill" class="status-pill disconnected">
-            <span class="pulse-dot"></span>
-            <span id="status-text">Disconnected</span>
-          </span>
-          <button id="session-button" class="btn btn-primary">Start</button>
-        </div>
+        <span class="wordmark">Salus<em>VPN</em></span>
+        <span id="connect-pill" class="status-pill pill--off">
+          <span class="pulse-dot"></span>
+          <span id="status-text">Disconnected</span>
+        </span>
       </header>
 
-      <div class="divider"></div>
-
-      <div class="metrics-strip">
-        <div class="metric">
-          <span id="session-timer" class="metric-val">00:00</span>
-          <span class="metric-lbl">Time</span>
+      <section class="card status-card">
+        <div class="status-row">
+          <span id="status-relay" class="status-relay">No relay selected</span>
+          <button id="session-button" class="btn btn--primary">Start</button>
         </div>
-        <div class="metric">
-          <span id="session-live-cost" class="metric-val">$0.00</span>
-          <span class="metric-lbl">Cost</span>
-        </div>
-        <div class="metric">
-          <span id="hero-trust" class="metric-val">--</span>
-          <span class="metric-lbl">Trust</span>
-        </div>
-        <div class="metric">
-          <span id="hero-latency" class="metric-val">--</span>
-          <span class="metric-lbl">Latency</span>
-        </div>
-      </div>
-      <p id="selected-details" class="detail-line">Select a relay to view verification details.</p>
-
-      <div class="divider"></div>
-
-      <div class="gemini-section">
-        <div class="gemini-row">
-          <span class="section-label">Gemini</span>
-          <div class="gemini-content">
-            <span id="recommended-node" class="gemini-node">—</span>
-            <span id="recommended-score" class="trust-val">--</span>
-            <span id="recommended-latency" class="muted">--</span>
+        <div class="metrics-grid">
+          <div class="mstat">
+            <span id="session-timer" class="mstat-val">00:00</span>
+            <span class="mstat-lbl">Time</span>
           </div>
-          <span id="recommended-badge" style="display:none"></span>
-          <button id="use-recommendation" class="btn btn-ghost">Use</button>
+          <div class="mstat">
+            <span id="session-live-cost" class="mstat-val">$0.00</span>
+            <span class="mstat-lbl">Cost</span>
+          </div>
+          <div class="mstat">
+            <span id="hero-trust" class="mstat-val">—</span>
+            <span class="mstat-lbl">Trust</span>
+          </div>
+          <div class="mstat">
+            <span id="hero-latency" class="mstat-val">—</span>
+            <span class="mstat-lbl">Latency</span>
+          </div>
+        </div>
+        <p id="selected-details" class="detail-line">Select a relay to view verification details.</p>
+      </section>
+
+      <section class="card gemini-card">
+        <div class="card-head">
+          <span class="section-label">Gemini</span>
+          <span id="recommended-badge" class="tag tag--ai">AI Pick</span>
+        </div>
+        <div class="gemini-row">
+          <span id="recommended-node" class="gemini-node">—</span>
+          <span id="recommended-score" class="trust-val">--</span>
+          <span id="recommended-latency" class="dim">--</span>
+          <button id="use-recommendation" class="btn btn--ghost btn--sm">Use</button>
         </div>
         <p id="recommended-reason" class="detail-line">Finding best relay…</p>
-      </div>
+      </section>
 
-      <div class="divider"></div>
-
-      <div class="relay-section">
-        <div class="relay-header">
+      <section class="card relays-card">
+        <div class="card-head">
           <span class="section-label">Relays</span>
-          <span class="badge-live">Live</span>
+          <span class="tag tag--live">Live</span>
         </div>
         <div id="nodes-list"></div>
-      </div>
+      </section>
 
-      <div class="divider"></div>
-
-      <footer class="footer">
-        <div class="wallet-area">
-          <span class="section-label">Phantom</span>
-          <span id="wallet-status" class="muted">Disconnected</span>
+      <section class="card wallet-card">
+        <div class="wallet-row">
+          <div>
+            <span class="section-label">Phantom</span>
+            <p id="wallet-status" class="detail-line">Disconnected</p>
+          </div>
+          <div class="wallet-actions">
+            <button id="wallet-button" class="btn btn--ghost">Connect</button>
+            <button id="end-session-button" class="btn btn--danger" disabled>End</button>
+          </div>
         </div>
-        <div class="footer-actions">
-          <button id="wallet-button" class="btn btn-ghost">Connect</button>
-          <button id="end-session-button" class="btn btn-danger" disabled>End session</button>
-        </div>
-      </footer>
+      </section>
 
-      <!-- State elements used by popup.js, not shown directly -->
-      <span id="session-node" style="display:none"></span>
-      <span id="session-cost" style="display:none"></span>
+      <span id="session-node"     style="display:none"></span>
+      <span id="session-cost"     style="display:none"></span>
       <span id="session-bot-risk" style="display:none"></span>
       <span id="session-human-lane" style="display:none"></span>
-      <span id="footer-cost" style="display:none"></span>
+      <span id="footer-cost"      style="display:none"></span>
     </div>
 
     <script src="relayNodes.js"></script>
