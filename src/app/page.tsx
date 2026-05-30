@@ -2,6 +2,7 @@ import Navbar from "@/components/Navbar";
 import StatsBanner from "@/components/StatsBanner";
 import NodeCard from "@/components/NodeCard";
 import SessionPanel from "@/components/SessionPanel";
+import TrustAdvisorPanel from "@/components/TrustAdvisor/TrustAdvisorPanel";
 import { relayNodes } from "@/data/relayNodes";
 
 export default function Home() {
@@ -48,6 +49,14 @@ export default function Home() {
       <div className="py-12 sm:py-16">
         <StatsBanner />
       </div>
+
+      {/* AI Trust Advisor */}
+      <section
+        id="advisor"
+        className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8"
+      >
+        <TrustAdvisorPanel />
+      </section>
 
       {/* Marketplace + Session Panel */}
       <section
