@@ -227,7 +227,7 @@ export async function getRecommendation(
     );
   }
 
-  return parseAndReconcile(rawJson, nodes);
+  return parseAndReconcile(rawJson);
 }
 
 /**
@@ -237,10 +237,7 @@ export async function getRecommendation(
  * recommended id maps to a known node and overwrite the name/trustScore from
  * our own data. This keeps the UI accurate even if the model fudges a field.
  */
-function parseAndReconcile(
-  rawJson: string,
-  nodes: RelayNode[],
-): GeminiRecommendation {
+function parseAndReconcile(rawJson: string): GeminiRecommendation {
   let parsed: Partial<GeminiRecommendation>;
   try {
     parsed = JSON.parse(rawJson) as Partial<GeminiRecommendation>;
