@@ -2,6 +2,7 @@ const nodeList = document.getElementById("nodes-list");
 const walletButton = document.getElementById("wallet-button");
 const walletStatus = document.getElementById("wallet-status");
 const walletNameEl = document.getElementById("wallet-name");
+const walletBalanceEl = document.getElementById("wallet-balance");
 const walletHint = document.getElementById("wallet-hint");
 const walletPicker = document.getElementById("wallet-picker");
 const walletPickerCancel = document.getElementById("wallet-picker-cancel");
@@ -65,6 +66,39 @@ async function parseJsonResponse(response) {
         ? "Dashboard server error — stop other dev servers, run: rm -rf .next && npm run dev"
         : text.slice(0, 200);
     throw new Error(hint);
+  }
+}
+
+function clearLocalSession() {
+  sessionActive = false;
+  activeSessionId = null;
+  if (sessionInterval) {
+    clearInterval(sessionInterval);
+    sessionInterval = null;
+  }
+  chrome.storage.local.set({
+    sessionActive: false,
+    activeSessionId: null,
+    walletSessionSigned: false,
+    walletSessionSignature: null,
+  });
+  updateConnectionUI();
+}
+
+async function validateStoredSession(sessionId) {
+  if (!sessionId) return false;
+
+  try {
+    const base = await getApiBase();
+    const response = await fetch(
+      `${base}/api/session/status?sessionId=${encodeURIComponent(sessionId)}`
+    );
+    if (!response.ok) return false;
+
+    const data = await parseJsonResponse(response);
+    return data.status === "active";
+  } catch {
+    return false;
   }
 }
 
@@ -177,19 +211,57 @@ function showWalletPicker(show) {
   walletButton.hidden = show;
 }
 
+async function fetchDevnetSolBalance(publicKey) {
+  const response = await fetch("https://api.devnet.solana.com", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "getBalance",
+      params: [publicKey],
+    }),
+  });
+  const data = await response.json();
+  return (data.result?.value ?? 0) / 1_000_000_000;
+}
+
+async function refreshDevnetBalances() {
+  if (!walletState.walletPublicKey) {
+    walletBalanceEl.style.display = "none";
+    return;
+  }
+
+  try {
+    const sol = await fetchDevnetSolBalance(walletState.walletPublicKey);
+    walletBalanceEl.style.display = "block";
+    walletBalanceEl.textContent = `Devnet SOL (on-chain): ${sol.toFixed(4)}`;
+
+    if (sol < 0.001) {
+      walletHint.textContent =
+        "Devnet SOL is 0 on-chain. In Phantom: Settings → Developer Settings → enable Testnet Mode → select Devnet (not Mainnet). Then use faucet.solana.com with Devnet selected.";
+    } else if (isWalletReady()) {
+      walletHint.textContent =
+        "Wallet linked. Start VPN to sign each session in Phantom.";
+    }
+  } catch {
+    walletBalanceEl.style.display = "none";
+  }
+}
+
 function updateWalletUI() {
   if (isWalletReady()) {
     walletStatus.textContent = `Connected · ${shortenAddress(walletState.walletPublicKey)}`;
-    walletNameEl.textContent = `${walletState.walletName ?? "Wallet"} · Solana Devnet`;
+    walletNameEl.textContent = `${walletState.walletName ?? "Wallet"} · use Devnet in Phantom`;
     walletNameEl.style.display = "block";
-    walletHint.textContent =
-      "Wallet linked. Start VPN to sign each session in Phantom.";
     walletButton.textContent = "Disconnect";
     walletButton.hidden = false;
     showWalletPicker(false);
+    void refreshDevnetBalances();
   } else {
     walletStatus.textContent = "Not connected";
     walletNameEl.style.display = "none";
+    walletBalanceEl.style.display = "none";
     walletHint.textContent =
       "Opens your Phantom or MetaMask approval window.";
     walletButton.textContent = "Connect Wallet";
@@ -211,17 +283,14 @@ function connectWallet(walletName) {
 
   walletHint.textContent = `Look for the ${walletName} icon in your toolbar and approve.`;
 
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const tab = tabs[0];
-    chrome.runtime.sendMessage({
-      type: "CONNECT_WALLET",
-      walletName,
-      tabId: tab?.id ?? null,
-      tabUrl: tab?.url ?? null,
-    });
-    walletPicker.querySelectorAll(".wallet-option").forEach((btn) => {
-      btn.disabled = false;
-    });
+  chrome.runtime.sendMessage({
+    type: "CONNECT_WALLET",
+    walletName,
+    tabId: null,
+    tabUrl: null,
+  });
+  walletPicker.querySelectorAll(".wallet-option").forEach((btn) => {
+    btn.disabled = false;
   });
 }
 
@@ -345,16 +414,14 @@ async function openDashboardConnect() {
 
 function requestSessionSignature() {
   return new Promise((resolve, reject) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const tab = tabs[0];
-      chrome.runtime.sendMessage(
-        {
-          type: "SIGN_SESSION_AUTH",
-          walletName: walletState.walletName,
-          relayId: selectedRelay?.id,
-          tabId: tab?.id ?? null,
-          tabUrl: tab?.url ?? null,
-        },
+    chrome.runtime.sendMessage(
+      {
+        type: "SIGN_SESSION_AUTH",
+        walletName: walletState.walletName,
+        relayId: selectedRelay?.id,
+        tabId: null,
+        tabUrl: null,
+      },
         (response) => {
           if (chrome.runtime.lastError) {
             reject(new Error(chrome.runtime.lastError.message));
@@ -367,7 +434,6 @@ function requestSessionSignature() {
           resolve(response);
         }
       );
-    });
   });
 }
 
@@ -469,16 +535,14 @@ function clearSettlementUI() {
 
 function requestSettlementSign(serializedTx) {
   return new Promise((resolve, reject) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const tab = tabs[0];
-      chrome.runtime.sendMessage(
-        {
-          type: "SETTLE_SESSION",
-          walletName: walletState.walletName,
-          serializedTx,
-          tabId: tab?.id ?? null,
-          tabUrl: tab?.url ?? null,
-        },
+    chrome.runtime.sendMessage(
+      {
+        type: "SETTLE_SESSION",
+        walletName: walletState.walletName,
+        serializedTx,
+        tabId: null,
+        tabUrl: null,
+      },
         (response) => {
           if (chrome.runtime.lastError) {
             reject(new Error(chrome.runtime.lastError.message));
@@ -491,7 +555,6 @@ function requestSettlementSign(serializedTx) {
           resolve(response);
         }
       );
-    });
   });
 }
 
@@ -501,7 +564,7 @@ async function runSettlement(sessionId) {
     return false;
   }
 
-  walletHint.textContent = "Approve the USDC payment in your wallet…";
+  walletHint.textContent = "Approve the USDC payment in your wallet (Devnet)…";
 
   try {
     const base = await getApiBase();
@@ -589,6 +652,28 @@ async function endSession() {
 
       if (!response.ok) {
         const data = await parseJsonResponse(response);
+        if (response.status === 404) {
+          clearLocalSession();
+          throw new Error(
+            "Session expired — dev server restarted. Start a new session."
+          );
+        }
+        if (
+          response.status === 409 &&
+          String(data.error ?? "").includes("already ended")
+        ) {
+          sessionActive = false;
+          activeSessionId = null;
+          chrome.storage.local.set({
+            sessionActive: false,
+            activeSessionId: null,
+            walletSessionSigned: false,
+            walletSessionSignature: null,
+          });
+          updateConnectionUI();
+          await runSettlement(endedSessionId);
+          return;
+        }
         throw new Error(data.error || "Failed to end session");
       }
 
@@ -670,7 +755,7 @@ function refreshNodeList(nodes) {
 function restoreState(nodes) {
   chrome.storage.local.get(
     ["selectedRelay", "sessionActive", "sessionSeconds", "activeSessionId"],
-    (result) => {
+    async (result) => {
       if (result.selectedRelay) {
         const selected = nodes.find((node) => node.id === result.selectedRelay);
         if (selected) setSelectedNode(selected, false);
@@ -679,6 +764,21 @@ function restoreState(nodes) {
       sessionActive = result.sessionActive || false;
       sessionSeconds = result.sessionSeconds || 0;
       activeSessionId = result.activeSessionId || null;
+
+      if (sessionActive && activeSessionId) {
+        const stillActive = await validateStoredSession(activeSessionId);
+        if (!stillActive) {
+          sessionActive = false;
+          activeSessionId = null;
+          chrome.storage.local.set({
+            sessionActive: false,
+            activeSessionId: null,
+          });
+          walletHint.textContent =
+            "Previous session expired. Start a new session.";
+        }
+      }
+
       updateConnectionUI();
 
       if (sessionActive && isWalletReady()) {

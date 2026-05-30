@@ -1,6 +1,12 @@
 import { createSession, type Session } from "@/lib/session";
 
-const sessions = new Map<string, Session>();
+const globalForSessions = globalThis as typeof globalThis & {
+  salusSessionStore?: Map<string, Session>;
+};
+
+const sessions =
+  globalForSessions.salusSessionStore ??
+  (globalForSessions.salusSessionStore = new Map<string, Session>());
 
 export function getSession(sessionId: string): Session | undefined {
   return sessions.get(sessionId);

@@ -6,6 +6,11 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({ selectedRelay: null }, () => {
     console.log("SalusVPN extension installed and storage initialized.");
   });
+  void sanitizeWalletConnectTabId();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  void sanitizeWalletConnectTabId();
 });
 
 function isInjectableUrl(url) {
@@ -122,6 +127,64 @@ async function resolveConnectTabId(tabId, tabUrl) {
   }
 
   return createBridgeTab();
+}
+
+function isTrustedWalletOrigin(url) {
+  if (!url) return false;
+  try {
+    const { hostname } = new URL(url);
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "solana.com"
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function resolveWalletTabId(tabId, tabUrl) {
+  const stored = await chrome.storage.local.get(["walletConnectTabId"]);
+
+  if (stored.walletConnectTabId) {
+    try {
+      const tab = await chrome.tabs.get(stored.walletConnectTabId);
+      if (tab?.url && isTrustedWalletOrigin(tab.url)) {
+        return stored.walletConnectTabId;
+      }
+      await chrome.storage.local.set({ walletConnectTabId: null });
+    } catch {
+      await chrome.storage.local.set({ walletConnectTabId: null });
+    }
+  }
+
+  const tabs = await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] });
+  const dashboard = tabs.find(
+    (tab) => tab.id && isLocalDashboardUrl(tab.url)
+  );
+  if (dashboard?.id) {
+    return dashboard.id;
+  }
+
+  if (tabId && isInjectableUrl(tabUrl) && isTrustedWalletOrigin(tabUrl)) {
+    return tabId;
+  }
+
+  return createBridgeTab();
+}
+
+async function sanitizeWalletConnectTabId() {
+  const stored = await chrome.storage.local.get(["walletConnectTabId"]);
+  if (!stored.walletConnectTabId) return;
+
+  try {
+    const tab = await chrome.tabs.get(stored.walletConnectTabId);
+    if (!tab?.url || !isTrustedWalletOrigin(tab.url)) {
+      await chrome.storage.local.set({ walletConnectTabId: null });
+    }
+  } catch {
+    await chrome.storage.local.set({ walletConnectTabId: null });
+  }
 }
 
 function showConnectNotification(walletName) {
@@ -285,7 +348,7 @@ async function connectWalletViaProvider(walletName, tabId, tabUrl) {
 
   let targetTabId;
   try {
-    targetTabId = await resolveConnectTabId(tabId, tabUrl);
+    targetTabId = await resolveWalletTabId(null, null);
     result = await injectWalletConnect(targetTabId, walletName);
   } catch (err) {
     lastError = err;
@@ -352,21 +415,7 @@ async function signSessionAuth(walletName, relayId, tabId, tabUrl) {
 
   showConnectNotification(name);
 
-  let targetTabId =
-    stored.walletConnectTabId ??
-    (tabId && isInjectableUrl(tabUrl) ? tabId : null);
-
-  if (targetTabId) {
-    try {
-      await chrome.tabs.get(targetTabId);
-    } catch {
-      targetTabId = null;
-    }
-  }
-
-  if (!targetTabId) {
-    targetTabId = await resolveConnectTabId(tabId, tabUrl);
-  }
+  const targetTabId = await resolveWalletTabId(null, null);
 
   const challenge = [
     "SalusVPN — Authorize VPN Session",
@@ -421,10 +470,10 @@ async function settleSessionOnTab(tabId, walletName, serializedTx) {
   return injectSettlement(tabId, walletName, serializedTx);
 }
 
-async function settleSessionViaProvider(walletName, serializedTx, tabId, tabUrl) {
+async function settleSessionViaProvider(walletName, serializedTx) {
   showConnectNotification(walletName);
 
-  const targetTabId = await resolveConnectTabId(tabId, tabUrl);
+  const targetTabId = await resolveWalletTabId(null, null);
   return settleSessionOnTab(targetTabId, walletName, serializedTx);
 }
 
@@ -491,12 +540,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "SETTLE_SESSION") {
-    settleSessionViaProvider(
-      message.walletName,
-      message.serializedTx,
-      message.tabId,
-      message.tabUrl
-    )
+    settleSessionViaProvider(message.walletName, message.serializedTx)
       .then((result) => sendResponse({ ok: true, ...result }))
       .catch((err) =>
         sendResponse({
