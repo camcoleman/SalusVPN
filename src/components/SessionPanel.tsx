@@ -20,6 +20,12 @@ interface SessionPanelProps {
   selectedNode: RelayNode | null;
 }
 
+interface PendingSettlementSession {
+  sessionId: string;
+  nodeName: string;
+  accruedCostUSDC: number;
+}
+
 interface SessionFieldProps {
   label: string;
   value: React.ReactNode;
@@ -75,6 +81,9 @@ export default function SessionPanel({ selectedNode }: SessionPanelProps) {
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingSettlement, setPendingSettlement] =
+    useState<PendingSettlementSession | null>(null);
+  const [settlingPending, setSettlingPending] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedRef = useRef(0);
@@ -89,6 +98,100 @@ export default function SessionPanel({ selectedNode }: SessionPanelProps) {
   useEffect(() => {
     return () => clearTick();
   }, [clearTick]);
+
+  const loadPendingSettlement = useCallback(async () => {
+    try {
+      const response = await fetch("/api/session/history");
+      if (!response.ok) return;
+
+      const data = (await response.json()) as {
+        sessions: Array<{
+          sessionId: string;
+          nodeName: string;
+          accruedCostUSDC: number;
+          settlementStatus: SettlementStatus;
+        }>;
+      };
+
+      const pending = data.sessions.find(
+        (session) => session.settlementStatus === "pending"
+      );
+
+      if (pending) {
+        setPendingSettlement({
+          sessionId: pending.sessionId,
+          nodeName: pending.nodeName,
+          accruedCostUSDC: pending.accruedCostUSDC,
+        });
+      } else {
+        setPendingSettlement(null);
+      }
+    } catch {
+      // ignore fetch errors for optional banner
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPendingSettlement();
+
+    const handleUpdate = () => {
+      void loadPendingSettlement();
+    };
+
+    window.addEventListener("session-updated", handleUpdate);
+    return () => window.removeEventListener("session-updated", handleUpdate);
+  }, [loadPendingSettlement]);
+
+  const settlePendingSession = useCallback(async () => {
+    if (!pendingSettlement || !connected || !publicKey || !sendTransaction) {
+      setError("Connect your wallet to complete settlement.");
+      return;
+    }
+
+    setSettlingPending(true);
+    setError(null);
+
+    try {
+      const result = await attemptPrototypeSettlement(
+        connection,
+        publicKey,
+        sendTransaction
+      );
+
+      const finalSettlementStatus: SettlementStatus =
+        result.status === "settled" && result.signature ? "settled" : "simulated";
+
+      await fetch("/api/session/settle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: pendingSettlement.sessionId,
+          settlementStatus: finalSettlementStatus,
+          transactionSignature: result.signature,
+        }),
+      });
+
+      setPendingSettlement(null);
+      setSettlementMessage(
+        finalSettlementStatus === "settled"
+          ? "Extension session settled on-chain."
+          : "Extension session settlement simulated."
+      );
+      window.dispatchEvent(new CustomEvent("session-updated"));
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to settle extension session"
+      );
+    } finally {
+      setSettlingPending(false);
+    }
+  }, [
+    pendingSettlement,
+    connected,
+    publicKey,
+    sendTransaction,
+    connection,
+  ]);
 
   const resetSession = useCallback(() => {
     clearTick();
@@ -272,6 +375,27 @@ export default function SessionPanel({ selectedNode }: SessionPanelProps) {
       <div className="mb-4">
         <WalletConnect />
       </div>
+
+      {pendingSettlement && (
+        <div className="mb-4 rounded-lg border border-accent-amber/30 bg-accent-amber/5 p-3">
+          <p className="text-xs font-medium text-accent-amber">
+            Session ended in extension
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            {pendingSettlement.nodeName} · $
+            {pendingSettlement.accruedCostUSDC.toFixed(4)} USDC pending
+            settlement
+          </p>
+          <button
+            type="button"
+            onClick={settlePendingSession}
+            disabled={settlingPending || !connected}
+            className="mt-2 w-full rounded-lg bg-accent-amber/10 px-3 py-2 text-xs font-semibold text-accent-amber transition-colors hover:bg-accent-amber/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {settlingPending ? "Settling..." : "Complete settlement"}
+          </button>
+        </div>
+      )}
 
       <div className="rounded-lg border border-border bg-background/50 p-4 font-mono">
         <SessionField

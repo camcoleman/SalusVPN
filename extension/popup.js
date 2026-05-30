@@ -1,8 +1,10 @@
-const API_BASE = "http://localhost:3000";
-
 const nodeList = document.getElementById("nodes-list");
 const walletButton = document.getElementById("wallet-button");
 const walletStatus = document.getElementById("wallet-status");
+const walletNameEl = document.getElementById("wallet-name");
+const walletHint = document.getElementById("wallet-hint");
+const settlementMessage = document.getElementById("settlement-message");
+const settleDashboardButton = document.getElementById("settle-dashboard-button");
 const recommendedBadge = document.getElementById("recommended-badge");
 const recommendedNode = document.getElementById("recommended-node");
 const recommendedScore = document.getElementById("recommended-score");
@@ -10,163 +12,243 @@ const recommendedLatency = document.getElementById("recommended-latency");
 const recommendedReason = document.getElementById("recommended-reason");
 const sessionNode = document.getElementById("session-node");
 const sessionCost = document.getElementById("session-cost");
-const sessionStatus = document.getElementById("session-status");
-const sessionTime = document.getElementById("session-time");
-const sessionMessage = document.getElementById("session-message");
-const startSessionButton = document.getElementById("start-session-button");
+const connectPill = document.getElementById("connect-pill");
+const statusText = document.getElementById("status-text");
+const statusRelay = document.getElementById("status-relay");
+const sessionButton = document.getElementById("session-button");
+const sessionTimer = document.getElementById("session-timer");
+const sessionLiveCost = document.getElementById("session-live-cost");
+const selectedDetails = document.getElementById("selected-details");
+const useRecommendationBtn = document.getElementById("use-recommendation");
 const endSessionButton = document.getElementById("end-session-button");
+const footerCost = document.getElementById("footer-cost");
+const sessionBotRisk = document.getElementById("session-bot-risk");
+const sessionHumanLane = document.getElementById("session-human-lane");
+const heroTrust = document.getElementById("hero-trust");
+const heroLatency = document.getElementById("hero-latency");
 
-let selectedNode = null;
+let selectedRelay = null;
+let sessionActive = false;
+let sessionSeconds = 0;
+let sessionInterval = null;
 let activeSessionId = null;
-let elapsedSeconds = 0;
-let sessionTimer = null;
+
+let walletState = {
+  walletConnected: false,
+  walletPublicKey: null,
+  walletName: null,
+};
+
+const regionEmoji = {
+  "US East": "🇺🇸",
+  "US West": "🇺🇸",
+  "EU West": "🇪🇺",
+  "EU Central": "🇩🇪",
+  APAC: "🌏",
+};
 
 function formatCurrency(value) {
   return `$${value.toFixed(4)}`;
 }
 
-function formatTime(seconds) {
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
-}
-
-function calculateBandwidth(seconds) {
-  return seconds * 1.5;
-}
-
-function calculateCost(bandwidthMB, pricePerSession, seconds) {
-  const baseCost = (pricePerSession * seconds) / 60;
-  const bandwidthCost = (bandwidthMB / 100) * 0.01;
-  return baseCost + bandwidthCost;
+function shortenAddress(address) {
+  return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
 function getBestNode(nodes) {
-  return nodes
-    .slice()
-    .sort((a, b) => {
-      if (a.trustScore !== b.trustScore) return b.trustScore - a.trustScore;
-      return a.latency - b.latency;
-    })[0];
+  return nodes.slice().sort((a, b) => {
+    if (a.trustScore !== b.trustScore) return b.trustScore - a.trustScore;
+    return a.latency - b.latency;
+  })[0];
+}
+
+function formatDuration(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function formatShortHash(hash) {
+  return `${hash.slice(0, 8)}…${hash.slice(-4)}`;
+}
+
+function formatAge(timestamp) {
+  const diffMs = Date.now() - new Date(timestamp).getTime();
+  const minutes = Math.round(diffMs / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  return `${Math.round(minutes / 60)}h ago`;
+}
+
+function getTrustClass(score) {
+  if (score >= 90) return "trust-green";
+  if (score >= 70) return "trust-yellow";
+  return "trust-red";
+}
+
+function isWalletReady() {
+  return Boolean(walletState.walletConnected && walletState.walletPublicKey);
 }
 
 function buildReason(node) {
-  const hints = [];
-  if (node.verified) hints.push("recently verified");
-  if (node.humanLaneAvailable) hints.push("human-verified lane available");
-  if (node.latency < 30) hints.push("low latency");
-  const quality =
-    node.trafficQualityScore >= 90
-      ? "excellent traffic quality"
-      : "good traffic quality";
-  hints.push(quality);
-  return `Recommended because it has ${hints.join(", ")}.`;
+  const parts = [];
+  if (node.verified) parts.push(`verified ${formatAge(node.lastVerified)}`);
+  if (node.humanLaneAvailable) parts.push("human lane");
+  if (node.latency < 30) parts.push("low latency");
+  parts.push(
+    node.trafficQualityScore >= 90 ? "excellent traffic" : "good traffic"
+  );
+  return parts.join(" · ");
 }
 
 function updateRecommendation(node) {
   recommendedBadge.textContent = node.verified ? "Best Overall" : "High Trust";
   recommendedNode.textContent = node.name;
   recommendedScore.textContent = `${node.trustScore}`;
-  recommendedLatency.textContent = `${node.latency} ms`;
+  recommendedScore.className = `trust-val ${getTrustClass(node.trustScore)}`;
+  recommendedLatency.textContent = `${node.latency}ms`;
   recommendedReason.textContent = buildReason(node);
 }
 
-function updateSessionMetrics() {
-  if (!selectedNode) return;
-  const bandwidth = calculateBandwidth(elapsedSeconds);
-  const cost = calculateCost(
-    bandwidth,
-    selectedNode.pricePerSession,
-    elapsedSeconds
-  );
-  sessionTime.textContent = formatTime(elapsedSeconds);
-  sessionCost.textContent = formatCurrency(cost);
-  return { bandwidth, cost };
-}
-
-function renderNodeCard(node) {
-  const card = document.createElement("article");
-  card.className = "node-card";
-
-  card.innerHTML = `
-    <div>
-      <h3>${node.name}</h3>
-      <p class="muted-text">${node.region}</p>
-    </div>
-    <div class="node-meta">
-      <span class="node-pill ${node.verified ? "green" : "red"}">${node.verified ? "Verified" : "Unverified"}</span>
-      <span class="node-pill blue">${node.humanLaneAvailable ? "Human Lane" : "Standard"}</span>
-      <span class="node-pill">Trust ${node.trustScore}</span>
-    </div>
-    <div class="node-actions">
-      <button class="node-button" data-node-id="${node.id}">Select</button>
-    </div>
-  `;
-
-  const button = card.querySelector("button");
-  button.addEventListener("click", () => selectNode(node));
-  return card;
-}
-
-function refreshNodeList(nodes) {
-  nodeList.innerHTML = "";
-  nodes.forEach((node) => nodeList.appendChild(renderNodeCard(node)));
-}
-
-function selectNode(node) {
-  selectedNode = node;
-  sessionNode.textContent = node.name;
-  sessionCost.textContent = formatCurrency(node.pricePerSession);
-  chrome.storage.local.set({ selectedRelay: node.id });
-  sessionMessage.textContent = "";
-}
-
-async function updateWalletStatus() {
-  const connected = await isWalletConnected();
-  walletStatus.textContent = connected ? "Wallet connected" : "Wallet disconnected";
-  walletButton.textContent = connected ? "Disconnect" : "Connect Wallet";
-}
-
-async function isWalletConnected() {
-  if (!window.solana || !window.solana.isPhantom) return false;
-  try {
-    const response = await window.solana.connect({ onlyIfTrusted: true });
-    return !!response?.publicKey;
-  } catch {
-    return false;
-  }
-}
-
-async function toggleWallet() {
-  if (!window.solana || !window.solana.isPhantom) {
-    walletStatus.textContent = "Phantom wallet not detected.";
+function updateSelectedDetails() {
+  if (!selectedRelay) {
+    heroTrust.textContent = "—";
+    heroTrust.className = "mstat-val";
+    heroLatency.textContent = "—";
+    sessionBotRisk.textContent = "--";
+    sessionHumanLane.textContent = "--";
+    selectedDetails.textContent =
+      "Select a relay to view verification details.";
+    statusRelay.textContent = "No relay selected";
     return;
   }
 
-  try {
-    if (walletButton.textContent === "Disconnect") {
-      await window.solana.disconnect();
-      walletStatus.textContent = "Wallet disconnected";
-      walletButton.textContent = "Connect Wallet";
+  heroTrust.textContent = `${selectedRelay.trustScore}`;
+  heroTrust.className = `mstat-val ${getTrustClass(selectedRelay.trustScore)}`;
+  heroLatency.textContent = `${selectedRelay.latency}ms`;
+  sessionBotRisk.textContent = `${selectedRelay.botRiskScore}%`;
+  sessionHumanLane.textContent = selectedRelay.humanLaneAvailable
+    ? "Available"
+    : "Unavailable";
+  selectedDetails.textContent = `Verified ${formatAge(selectedRelay.lastVerified)} · Hash ${formatShortHash(selectedRelay.attestationHash)} · ${selectedRelay.humanLaneAvailable ? "Human lane" : "Standard lane"} · Bot risk ${selectedRelay.botRiskScore}%`;
+}
+
+function updateWalletUI() {
+  if (isWalletReady()) {
+    walletStatus.textContent = `Connected · ${shortenAddress(walletState.walletPublicKey)}`;
+    walletNameEl.textContent = `${walletState.walletName ?? "Wallet"} · Solana Devnet`;
+    walletNameEl.style.display = "block";
+    walletHint.textContent = "Wallet synced from dashboard.";
+    walletButton.textContent = "Open Dashboard";
+  } else {
+    walletStatus.textContent = "Not connected";
+    walletNameEl.style.display = "none";
+    walletHint.textContent =
+      "Connect wallet on the dashboard to start a session.";
+    walletButton.textContent = "Open Dashboard to Connect";
+  }
+}
+
+function updateConnectionUI() {
+  statusText.textContent = sessionActive ? "Connected" : "Disconnected";
+  connectPill.classList.toggle("pill--on", sessionActive);
+  connectPill.classList.toggle("pill--off", !sessionActive);
+  sessionButton.textContent = sessionActive ? "Active" : "Start";
+  sessionButton.disabled =
+    sessionActive || !isWalletReady() || !selectedRelay;
+  endSessionButton.disabled = !sessionActive;
+}
+
+function updateTimer() {
+  sessionTimer.textContent = formatDuration(sessionSeconds);
+
+  let liveCost = 0;
+  if (selectedRelay) {
+    const metrics = getSessionMetrics(
+      sessionSeconds,
+      selectedRelay.pricePerSession
+    );
+    liveCost = metrics.accruedCostUSDC;
+  }
+
+  sessionLiveCost.textContent = formatCurrency(liveCost);
+  footerCost.textContent = formatCurrency(liveCost);
+  chrome.storage.local.set({ sessionSeconds });
+}
+
+function loadWalletState() {
+  chrome.storage.local.get(
+    [
+      "walletConnected",
+      "walletPublicKey",
+      "walletName",
+      "pendingSettlementSessionId",
+    ],
+    (result) => {
+      walletState = {
+        walletConnected: Boolean(result.walletConnected),
+        walletPublicKey: result.walletPublicKey ?? null,
+        walletName: result.walletName ?? null,
+      };
+      updateWalletUI();
+      updateConnectionUI();
+
+      if (result.pendingSettlementSessionId) {
+        settlementMessage.style.display = "block";
+        settlementMessage.textContent =
+          "Session ended. Complete USDC settlement on the dashboard.";
+        settleDashboardButton.style.display = "block";
+      } else {
+        settlementMessage.style.display = "none";
+        settleDashboardButton.style.display = "none";
+      }
+    }
+  );
+}
+
+function watchWalletState() {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+
+    if (
+      changes.walletConnected ||
+      changes.walletPublicKey ||
+      changes.walletName
+    ) {
+      loadWalletState();
+    }
+  });
+}
+
+function openDashboardConnect() {
+  const dashboardUrl = `${DASHBOARD_URL}/#session`;
+
+  chrome.tabs.query({}, (tabs) => {
+    const existing = tabs.find(
+      (tab) =>
+        tab.url &&
+        (tab.url.startsWith(DASHBOARD_URL) ||
+          tab.url.startsWith("http://127.0.0.1:3000"))
+    );
+
+    if (existing?.id) {
+      chrome.tabs.update(existing.id, { active: true, url: dashboardUrl });
       return;
     }
 
-    const response = await window.solana.connect();
-    walletStatus.textContent = `Connected: ${response.publicKey.toString().slice(0, 8)}...`;
-    walletButton.textContent = "Disconnect";
-  } catch {
-    walletStatus.textContent = "Connection cancelled or failed.";
-  }
+    chrome.tabs.create({ url: dashboardUrl });
+  });
 }
 
 async function startSession() {
-  if (!selectedNode) {
-    sessionMessage.textContent = "Select a relay node first.";
+  if (!selectedRelay) {
+    walletHint.textContent = "Select a relay before starting.";
     return;
   }
 
-  if (activeSessionId) {
-    sessionMessage.textContent = "Session already active.";
+  if (!isWalletReady()) {
+    walletHint.textContent = "Connect wallet on dashboard first.";
+    openDashboardConnect();
     return;
   }
 
@@ -174,7 +256,7 @@ async function startSession() {
     const response = await fetch(`${API_BASE}/api/session/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ selectedNodeId: selectedNode.id }),
+      body: JSON.stringify({ selectedNodeId: selectedRelay.id }),
     });
 
     if (!response.ok) {
@@ -184,81 +266,176 @@ async function startSession() {
 
     const data = await response.json();
     activeSessionId = data.sessionId;
-    elapsedSeconds = 0;
-    sessionStatus.textContent = "Active";
-    sessionMessage.textContent = "Session started via dashboard API.";
+    sessionActive = true;
+    sessionSeconds = 0;
 
-    if (sessionTimer) clearInterval(sessionTimer);
-    sessionTimer = setInterval(() => {
-      elapsedSeconds += 1;
-      updateSessionMetrics();
+    chrome.storage.local.set({
+      sessionActive: true,
+      activeSessionId: data.sessionId,
+      pendingSettlementSessionId: null,
+    });
+
+    settlementMessage.style.display = "none";
+    settleDashboardButton.style.display = "none";
+
+    updateConnectionUI();
+    updateTimer();
+
+    if (sessionInterval) clearInterval(sessionInterval);
+    sessionInterval = setInterval(() => {
+      sessionSeconds += 1;
+      updateTimer();
     }, 1000);
   } catch (error) {
-    sessionMessage.textContent =
+    walletHint.textContent =
       error instanceof Error ? error.message : "Failed to start session.";
   }
 }
 
 async function endSession() {
-  if (!selectedNode || !activeSessionId) {
-    sessionMessage.textContent = "No active session to end.";
-    return;
+  if (sessionInterval) {
+    clearInterval(sessionInterval);
+    sessionInterval = null;
   }
 
-  if (sessionTimer) {
-    clearInterval(sessionTimer);
-    sessionTimer = null;
-  }
+  if (activeSessionId && selectedRelay) {
+    const metrics = getSessionMetrics(
+      sessionSeconds,
+      selectedRelay.pricePerSession
+    );
 
-  const metrics = updateSessionMetrics();
-  const bandwidth = metrics?.bandwidth ?? calculateBandwidth(elapsedSeconds);
-  const cost =
-    metrics?.cost ??
-    calculateCost(bandwidth, selectedNode.pricePerSession, elapsedSeconds);
+    try {
+      const response = await fetch(`${API_BASE}/api/session/end`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: activeSessionId,
+          selectedNodeId: selectedRelay.id,
+          bandwidthUsedMB: metrics.bandwidthMB,
+          accruedCostUSDC: metrics.accruedCostUSDC,
+        }),
+      });
 
-  try {
-    const response = await fetch(`${API_BASE}/api/session/end`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: activeSessionId,
-        selectedNodeId: selectedNode.id,
-        bandwidthUsedMB: bandwidth,
-        accruedCostUSDC: cost,
-      }),
-    });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to end session");
+      }
 
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || "Failed to end session");
+      chrome.storage.local.set({
+        pendingSettlementSessionId: activeSessionId,
+      });
+
+      settlementMessage.style.display = "block";
+      settlementMessage.textContent =
+        "Session ended. Open dashboard to complete USDC settlement.";
+      settleDashboardButton.style.display = "block";
+    } catch (error) {
+      walletHint.textContent =
+        error instanceof Error ? error.message : "Failed to end session.";
     }
-
-    sessionStatus.textContent = "Ended";
-    sessionMessage.textContent =
-      "Session ended. Settlement runs in the dashboard wallet flow.";
-    activeSessionId = null;
-  } catch (error) {
-    sessionMessage.textContent =
-      error instanceof Error ? error.message : "Failed to end session.";
   }
+
+  sessionActive = false;
+  activeSessionId = null;
+
+  chrome.storage.local.set({
+    sessionActive: false,
+    activeSessionId: null,
+  });
+
+  updateConnectionUI();
 }
 
-walletButton.addEventListener("click", toggleWallet);
-startSessionButton.addEventListener("click", startSession);
-endSessionButton.addEventListener("click", endSession);
+function setSelectedNode(node, persist = true) {
+  selectedRelay = node;
+  statusRelay.textContent = node.name;
+  sessionNode.textContent = node.name;
+  sessionCost.textContent = formatCurrency(node.pricePerSession);
+  if (persist) chrome.storage.local.set({ selectedRelay: node.id });
+  updateSelectedDetails();
+  updateConnectionUI();
 
-function restoreSelectedNode(nodes) {
-  chrome.storage.local.get(["selectedRelay"], (result) => {
-    const node = nodes.find((entry) => entry.id === result.selectedRelay);
-    if (node) selectNode(node);
+  document.querySelectorAll(".relay-row").forEach((row) => {
+    row.classList.toggle("selected", row.dataset.nodeId === node.id);
   });
 }
+
+function renderNodeRow(node) {
+  const row = document.createElement("div");
+  row.className = "relay-row";
+  row.dataset.nodeId = node.id;
+  const emoji = regionEmoji[node.region] || "🌐";
+
+  row.innerHTML = `
+    <div>
+      <div class="relay-name">${node.name}</div>
+      <div class="relay-region">${emoji} ${node.region}</div>
+    </div>
+    <span class="relay-trust ${getTrustClass(node.trustScore)}">${node.trustScore}</span>
+    <span class="relay-latency">${node.latency}ms</span>
+    <span class="relay-price">${formatCurrency(node.pricePerSession)}</span>
+    <button class="relay-select" title="Select ${node.name}">→</button>
+  `;
+
+  row.querySelector(".relay-select").addEventListener("click", (e) => {
+    e.stopPropagation();
+    setSelectedNode(node);
+  });
+  row.addEventListener("click", () => setSelectedNode(node));
+  return row;
+}
+
+function refreshNodeList(nodes) {
+  nodeList.innerHTML = "";
+  nodes.forEach((node) => nodeList.appendChild(renderNodeRow(node)));
+}
+
+function restoreState(nodes) {
+  chrome.storage.local.get(
+    ["selectedRelay", "sessionActive", "sessionSeconds", "activeSessionId"],
+    (result) => {
+      if (result.selectedRelay) {
+        const selected = nodes.find((node) => node.id === result.selectedRelay);
+        if (selected) setSelectedNode(selected, false);
+      }
+
+      sessionActive = result.sessionActive || false;
+      sessionSeconds = result.sessionSeconds || 0;
+      activeSessionId = result.activeSessionId || null;
+      updateConnectionUI();
+
+      if (sessionActive && isWalletReady()) {
+        if (sessionInterval) clearInterval(sessionInterval);
+        sessionInterval = setInterval(() => {
+          sessionSeconds += 1;
+          updateTimer();
+        }, 1000);
+        updateTimer();
+      } else if (sessionActive) {
+        sessionActive = false;
+        chrome.storage.local.set({ sessionActive: false });
+        updateConnectionUI();
+      } else {
+        updateTimer();
+      }
+    }
+  );
+}
+
+walletButton.addEventListener("click", openDashboardConnect);
+settleDashboardButton.addEventListener("click", openDashboardConnect);
+sessionButton.addEventListener("click", startSession);
+useRecommendationBtn.addEventListener("click", () =>
+  setSelectedNode(getBestNode(relayNodes))
+);
+endSessionButton.addEventListener("click", endSession);
 
 window.addEventListener("DOMContentLoaded", () => {
   if (!Array.isArray(relayNodes)) return;
   const best = getBestNode(relayNodes);
   updateRecommendation(best);
   refreshNodeList(relayNodes);
-  restoreSelectedNode(relayNodes);
-  updateWalletStatus();
+  loadWalletState();
+  watchWalletState();
+  restoreState(relayNodes);
 });

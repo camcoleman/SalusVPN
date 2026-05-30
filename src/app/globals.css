@@ -59,3 +59,45 @@ body {
     linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
   background-size: 48px 48px;
 }
+
+/* Wallet adapter modal — match SalusVPN dark theme */
+.wallet-adapter-modal-wrapper {
+  background: rgba(10, 10, 15, 0.85);
+  backdrop-filter: blur(4px);
+}
+
+.wallet-adapter-modal {
+  background: var(--surface-elevated) !important;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+.wallet-adapter-modal-title {
+  color: var(--foreground);
+}
+
+.wallet-adapter-modal-list {
+  margin: 0;
+}
+
+.wallet-adapter-modal-list .wallet-adapter-button {
+  color: var(--foreground);
+  border-radius: 8px;
+  font-size: 14px;
+  height: 44px;
+  line-height: 44px;
+}
+
+.wallet-adapter-modal-list .wallet-adapter-button:hover {
+  background: var(--surface);
+}
+
+.wallet-adapter-modal-button-close {
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+.wallet-adapter-modal-button-close:hover {
+  background: var(--border);
+}
