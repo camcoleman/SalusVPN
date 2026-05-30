@@ -1,9 +1,7 @@
 import Navbar from "@/components/Navbar";
 import StatsBanner from "@/components/StatsBanner";
-import NodeCard from "@/components/NodeCard";
-import SessionPanel from "@/components/SessionPanel";
+import MarketplaceSection from "@/components/MarketplaceSection";
 import TrustAdvisorPanel from "@/components/TrustAdvisor/TrustAdvisorPanel";
-import { relayNodes } from "@/data/relayNodes";
 
 export default function Home() {
   return (
@@ -73,16 +71,7 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <div className="grid gap-4 sm:grid-cols-2">
-              {relayNodes.map((node) => (
-                <NodeCard key={node.id} node={node} />
-              ))}
-            </div>
-          </div>
-          <SessionPanel />
-        </div>
+        <MarketplaceSection />
       </section>
     </div>
   );

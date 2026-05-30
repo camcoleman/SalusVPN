@@ -3,6 +3,8 @@ import TrustScoreBadge from "@/components/TrustScoreBadge";
 
 interface NodeCardProps {
   node: RelayNode;
+  selected?: boolean;
+  onSelect?: (nodeId: string) => void;
 }
 
 function Badge({
@@ -37,11 +39,36 @@ function MetricRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function NodeCard({ node }: NodeCardProps) {
+export default function NodeCard({
+  node,
+  selected = false,
+  onSelect,
+}: NodeCardProps) {
   const lowBotRisk = node.botRiskScore < 30;
 
   return (
-    <article className="group rounded-xl border border-border bg-surface p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-lg hover:shadow-accent/5">
+    <article
+      role={onSelect ? "button" : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onClick={onSelect ? () => onSelect(node.id) : undefined}
+      onKeyDown={
+        onSelect
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect(node.id);
+              }
+            }
+          : undefined
+      }
+      className={`group rounded-xl border bg-surface p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-lg hover:shadow-accent/5 ${
+        onSelect ? "cursor-pointer" : ""
+      } ${
+        selected
+          ? "border-accent/60 ring-2 ring-accent"
+          : "border-border"
+      }`}
+    >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold tracking-tight">{node.name}</h3>
