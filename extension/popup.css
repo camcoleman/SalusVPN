@@ -1,0 +1,198 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, sans-serif;
+  background: #0b1120;
+  color: #e7eaf4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 360px;
+}
+
+.container {
+  padding: 16px;
+}
+
+header {
+  margin-bottom: 16px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #7c85a1;
+  margin: 0 0 4px;
+}
+
+h1,
+h2 {
+  margin: 0;
+}
+
+h1 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(124, 190, 255, 0.12);
+  color: #7fccff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge-secondary {
+  background: rgba(144, 157, 196, 0.18);
+  color: #c6d0ff;
+}
+
+.muted-text {
+  color: #8c97b6;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.metric-grid,
+.session-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.metric-label {
+  color: #8c97b6;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.metric-value {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.wallet-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.button {
+  border: none;
+  border-radius: 999px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 10px 14px;
+}
+
+.button-primary {
+  background: #4987ff;
+  color: white;
+}
+
+.node-list {
+  display: grid;
+  gap: 10px;
+}
+
+.node-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 12px;
+}
+
+.node-card:hover {
+  border-color: rgba(73, 135, 255, 0.35);
+}
+
+.node-card h3 {
+  margin: 0 0 2px;
+  font-size: 15px;
+}
+
+.node-card p {
+  margin: 0;
+}
+
+.node-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.node-pill {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.06);
+  color: #c3d0ff;
+}
+
+.node-pill.green {
+  background: rgba(106, 210, 129, 0.18);
+  color: #8ff5a4;
+}
+
+.node-pill.red {
+  background: rgba(255, 101, 110, 0.18);
+  color: #ff9aa1;
+}
+
+.node-pill.blue {
+  background: rgba(73, 135, 255, 0.18);
+  color: #8fc9ff;
+}
+
+.node-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.node-button {
+  width: 100%;
+  background: #1d263b;
+  color: #e7eaf4;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.node-button:hover {
+  border-color: rgba(73, 135, 255, 0.35);
+}
