@@ -40,6 +40,26 @@ export function getTrustScoreLabel(score: number): TrustScoreLabel {
   return "Warning";
 }
 
+export interface TrustScoreFactor {
+  label: string;
+  score: number;
+  weight: number;
+}
+
+export function getTrustScoreFactors(input: TrustScoreInput): TrustScoreFactor[] {
+  return [
+    { label: "Uptime", score: input.uptime, weight: 0.25 },
+    { label: "Latency", score: scoreLatency(input.latency), weight: 0.2 },
+    { label: "Traffic Quality", score: input.trafficQualityScore, weight: 0.25 },
+    { label: "Bot Safety", score: 100 - input.botRiskScore, weight: 0.2 },
+    {
+      label: "Verification",
+      score: input.verified ? 100 : 40,
+      weight: 0.1,
+    },
+  ];
+}
+
 export function getTrustScoreColors(score: number): {
   bg: string;
   text: string;

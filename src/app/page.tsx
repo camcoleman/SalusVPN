@@ -1,6 +1,6 @@
 import Navbar from "@/components/Navbar";
 import StatsBanner from "@/components/StatsBanner";
-import DashboardClient from "@/components/DashboardClient";
+import Link from "next/link";
 
 export default function Home() {
   return (
@@ -25,12 +25,12 @@ export default function Home() {
               verify and choose trusted infrastructure before connecting.
             </p>
             <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-              <a
-                href="#marketplace"
+              <Link
+                href="/dashboard#marketplace"
                 className="inline-flex h-12 w-full items-center justify-center rounded-lg bg-accent px-6 text-sm font-semibold text-white transition-colors hover:bg-accent/90 sm:w-auto"
               >
                 Explore Nodes
-              </a>
+              </Link>
               <a
                 href="#stats"
                 className="inline-flex h-12 w-full items-center justify-center rounded-lg border border-border bg-surface px-6 text-sm font-semibold transition-colors hover:border-accent/40 hover:bg-surface-elevated sm:w-auto"
@@ -47,7 +47,23 @@ export default function Home() {
         <StatsBanner />
       </div>
 
-      <DashboardClient />
+      <section className="border-t border-border py-16 sm:py-20">
+        <div className="mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            Ready to verify your next connection?
+          </h2>
+          <p className="mt-3 text-muted">
+            Open the relay dashboard to browse nodes, inspect trust scores, and
+            monitor sessions and payments.
+          </p>
+          <Link
+            href="/dashboard"
+            className="mt-8 inline-flex h-12 items-center justify-center rounded-lg bg-accent px-8 text-sm font-semibold text-white transition-colors hover:bg-accent/90"
+          >
+            Go to Dashboard
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }
