@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { getUsdcBalance } from "@/lib/settlement";
 
 function shortenAddress(address: string): string {
   return `${address.slice(0, 4)}...${address.slice(-4)}`;
@@ -13,14 +14,35 @@ function isPhantomInstalled(): boolean {
 }
 
 export default function WalletConnect() {
+  const { connection } = useConnection();
   const { publicKey, connect, connecting, connected, disconnect } =
     useWallet();
   const [phantomInstalled, setPhantomInstalled] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
 
   useEffect(() => {
     setPhantomInstalled(isPhantomInstalled());
   }, []);
+
+  useEffect(() => {
+    if (!connected || !publicKey) {
+      setUsdcBalance(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadBalance() {
+      const balance = await getUsdcBalance(connection, publicKey!);
+      if (!cancelled) setUsdcBalance(balance);
+    }
+
+    loadBalance();
+    return () => {
+      cancelled = true;
+    };
+  }, [connected, publicKey, connection]);
 
   const handleConnect = useCallback(async () => {
     setError(null);
@@ -75,6 +97,26 @@ export default function WalletConnect() {
             Solana Devnet
           </span>
         </div>
+        {usdcBalance !== null && (
+          <p className="mt-2 text-xs text-muted">
+            Devnet USDC:{" "}
+            <span className="font-medium text-foreground">
+              {usdcBalance.toFixed(4)}
+            </span>
+          </p>
+        )}
+        <p className="mt-1 text-xs text-muted">
+          Need devnet USDC? Use the{" "}
+          <a
+            href="https://spl-token-faucet.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent underline-offset-2 hover:underline"
+          >
+            SPL token faucet
+          </a>
+          .
+        </p>
         <button
           type="button"
           onClick={() => disconnect()}

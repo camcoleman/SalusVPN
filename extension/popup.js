@@ -1,43 +1,44 @@
-const nodeList = document.getElementById("nodes-list");
-const walletButton = document.getElementById("wallet-button");
-const walletStatus = document.getElementById("wallet-status");
-const recommendedBadge = document.getElementById("recommended-badge");
-const recommendedNode = document.getElementById("recommended-node");
-const recommendedScore = document.getElementById("recommended-score");
+const nodeList        = document.getElementById("nodes-list");
+const walletButton    = document.getElementById("wallet-button");
+const walletStatus    = document.getElementById("wallet-status");
+const recommendedBadge   = document.getElementById("recommended-badge");
+const recommendedNode    = document.getElementById("recommended-node");
+const recommendedScore   = document.getElementById("recommended-score");
 const recommendedLatency = document.getElementById("recommended-latency");
-const recommendedReason = document.getElementById("recommended-reason");
-const sessionNode = document.getElementById("session-node");
-const sessionCost = document.getElementById("session-cost");
-const connectPill = document.getElementById("connect-pill");
-const statusText = document.getElementById("status-text");
-const sessionButton = document.getElementById("session-button");
-const sessionTimer = document.getElementById("session-timer");
+const recommendedReason  = document.getElementById("recommended-reason");
+const sessionNode     = document.getElementById("session-node");
+const sessionCost     = document.getElementById("session-cost");
+const connectPill     = document.getElementById("connect-pill");
+const statusText      = document.getElementById("status-text");
+const statusRelay     = document.getElementById("status-relay");
+const sessionButton   = document.getElementById("session-button");
+const sessionTimer    = document.getElementById("session-timer");
 const sessionLiveCost = document.getElementById("session-live-cost");
 const selectedDetails = document.getElementById("selected-details");
 const useRecommendationBtn = document.getElementById("use-recommendation");
 const endSessionButton = document.getElementById("end-session-button");
-const footerCost = document.getElementById("footer-cost");
-const sessionBotRisk = document.getElementById("session-bot-risk");
+const footerCost      = document.getElementById("footer-cost");
+const sessionBotRisk  = document.getElementById("session-bot-risk");
 const sessionHumanLane = document.getElementById("session-human-lane");
-const heroTrust = document.getElementById("hero-trust");
-const heroLatency = document.getElementById("hero-latency");
+const heroTrust       = document.getElementById("hero-trust");
+const heroLatency     = document.getElementById("hero-latency");
 
-let selectedRelay = null;
-let sessionActive = false;
+let selectedRelay  = null;
+let sessionActive  = false;
 let sessionSeconds = 0;
 let sessionInterval = null;
 const liveCostRate = 0.0002;
 
 const regionEmoji = {
-  "US East": "🇺🇸",
-  "US West": "🇺🇸",
-  "EU West": "🇪🇺",
-  "EU Central": "🇩🇪",
-  APAC: "🌏",
+  "US East":   "🇺🇸",
+  "US West":   "🇺🇸",
+  "EU West":   "🇪🇺",
+  "EU Central":"🇩🇪",
+  APAC:        "🌏",
 };
 
 function formatCurrency(value) {
-  return `$${value.toFixed(2)}`;
+  return `$${value.toFixed(4)}`;
 }
 
 function getBestNode(nodes) {
@@ -76,42 +77,43 @@ function buildReason(node) {
   if (node.verified) parts.push(`verified ${formatAge(node.lastVerified)}`);
   if (node.humanLaneAvailable) parts.push("human lane");
   if (node.latency < 30) parts.push("low latency");
-  parts.push(node.trafficQualityScore >= 90 ? "excellent traffic quality" : "good traffic quality");
+  parts.push(node.trafficQualityScore >= 90 ? "excellent traffic" : "good traffic");
   return parts.join(" · ");
 }
 
 function updateRecommendation(node) {
   recommendedBadge.textContent = node.verified ? "Best Overall" : "High Trust";
-  recommendedNode.textContent = node.name;
+  recommendedNode.textContent  = node.name;
   recommendedScore.textContent = `${node.trustScore}`;
-  recommendedScore.className = `trust-val ${getTrustClass(node.trustScore)}`;
+  recommendedScore.className   = `trust-val ${getTrustClass(node.trustScore)}`;
   recommendedLatency.textContent = `${node.latency}ms`;
-  recommendedReason.textContent = buildReason(node);
+  recommendedReason.textContent  = buildReason(node);
 }
 
 function updateSelectedDetails() {
   if (!selectedRelay) {
-    heroTrust.textContent = "--";
-    heroTrust.className = "metric-val";
-    heroLatency.textContent = "--";
-    sessionBotRisk.textContent = "--";
+    heroTrust.textContent  = "—";
+    heroTrust.className    = "mstat-val";
+    heroLatency.textContent = "—";
+    sessionBotRisk.textContent  = "--";
     sessionHumanLane.textContent = "--";
     selectedDetails.textContent = "Select a relay to view verification details.";
+    statusRelay.textContent = "No relay selected";
     return;
   }
 
-  heroTrust.textContent = `${selectedRelay.trustScore}`;
-  heroTrust.className = `metric-val ${getTrustClass(selectedRelay.trustScore)}`;
+  heroTrust.textContent  = `${selectedRelay.trustScore}`;
+  heroTrust.className    = `mstat-val ${getTrustClass(selectedRelay.trustScore)}`;
   heroLatency.textContent = `${selectedRelay.latency}ms`;
-  sessionBotRisk.textContent = `${selectedRelay.botRiskScore}%`;
+  sessionBotRisk.textContent   = `${selectedRelay.botRiskScore}%`;
   sessionHumanLane.textContent = selectedRelay.humanLaneAvailable ? "Available" : "Unavailable";
-  selectedDetails.textContent = `${selectedRelay.name} · Verified ${formatAge(selectedRelay.lastVerified)} · Hash ${formatShortHash(selectedRelay.attestationHash)} · ${selectedRelay.humanLaneAvailable ? "Human lane" : "Standard lane"} · Bot risk ${selectedRelay.botRiskScore}%`;
+  selectedDetails.textContent  = `Verified ${formatAge(selectedRelay.lastVerified)} · Hash ${formatShortHash(selectedRelay.attestationHash)} · ${selectedRelay.humanLaneAvailable ? "Human lane" : "Standard lane"} · Bot risk ${selectedRelay.botRiskScore}%`;
 }
 
 function updateConnectionUI() {
   statusText.textContent = sessionActive ? "Connected" : "Disconnected";
-  connectPill.classList.toggle("connected", sessionActive);
-  connectPill.classList.toggle("disconnected", !sessionActive);
+  connectPill.classList.toggle("pill--on",  sessionActive);
+  connectPill.classList.toggle("pill--off", !sessionActive);
   sessionButton.textContent = sessionActive ? "Pause" : "Start";
   endSessionButton.disabled = !sessionActive;
 }
@@ -157,6 +159,7 @@ function stopSession(reset = false) {
 
 function setSelectedNode(node, persist = true) {
   selectedRelay = node;
+  statusRelay.textContent = node.name;
   sessionNode.textContent = node.name;
   sessionCost.textContent = formatCurrency(node.pricePerSession);
   if (persist) chrome.storage.local.set({ selectedRelay: node.id });
@@ -243,7 +246,7 @@ function restoreState(nodes) {
       if (selected) setSelectedNode(selected, false);
     }
 
-    sessionActive = result.sessionActive || false;
+    sessionActive  = result.sessionActive  || false;
     sessionSeconds = result.sessionSeconds || 0;
     updateConnectionUI();
 

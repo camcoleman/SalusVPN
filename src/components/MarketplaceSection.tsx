@@ -1,15 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useSessionSelection } from "@/context/SessionSelectionContext";
 import { relayNodes } from "@/data/relayNodes";
 import NodeCard from "@/components/NodeCard";
 import SessionPanel from "@/components/SessionPanel";
+import SessionHistory from "@/components/SessionHistory";
 
 export default function MarketplaceSection() {
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-
-  const selectedNode =
-    relayNodes.find((node) => node.id === selectedNodeId) ?? null;
+  const { selectedNodeId, selectedNode, selectNode } = useSessionSelection();
 
   return (
     <div className="grid gap-8 lg:grid-cols-3">
@@ -20,12 +18,15 @@ export default function MarketplaceSection() {
               key={node.id}
               node={node}
               selected={selectedNodeId === node.id}
-              onSelect={setSelectedNodeId}
+              onSelect={selectNode}
             />
           ))}
         </div>
       </div>
-      <SessionPanel selectedNode={selectedNode} />
+      <div className="space-y-6">
+        <SessionPanel selectedNode={selectedNode} />
+        <SessionHistory />
+      </div>
     </div>
   );
 }
