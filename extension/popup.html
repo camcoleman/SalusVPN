@@ -7,64 +7,86 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <div class="container">
-      <header>
-        <div>
-          <p class="eyebrow">SalusVPN</p>
-          <h1>Trusted VPN Infrastructure</h1>
+    <div class="popup">
+
+      <header class="header">
+        <span class="wordmark">SalusVPN</span>
+        <div class="header-right">
+          <span id="connect-pill" class="status-pill disconnected">
+            <span class="pulse-dot"></span>
+            <span id="status-text">Disconnected</span>
+          </span>
+          <button id="session-button" class="btn btn-primary">Start</button>
         </div>
       </header>
 
-      <section class="card summary-card">
-        <div class="section-heading">
-          <h2>Gemini Recommendation</h2>
-          <span id="recommended-badge" class="badge"></span>
-        </div>
-        <p id="recommended-reason" class="muted-text"></p>
-        <div class="metric-grid">
-          <div>
-            <p class="metric-label">Node</p>
-            <p id="recommended-node" class="metric-value"></p>
-          </div>
-          <div>
-            <p class="metric-label">Trust Score</p>
-            <p id="recommended-score" class="metric-value"></p>
-          </div>
-          <div>
-            <p class="metric-label">Latency</p>
-            <p id="recommended-latency" class="metric-value"></p>
-          </div>
-        </div>
-      </section>
+      <div class="divider"></div>
 
-      <section class="card wallet-card">
-        <div class="section-heading">
-          <h2>Wallet & Session</h2>
+      <div class="metrics-strip">
+        <div class="metric">
+          <span id="session-timer" class="metric-val">00:00</span>
+          <span class="metric-lbl">Time</span>
         </div>
-        <div class="wallet-row">
-          <span>Phantom</span>
-          <button id="wallet-button" class="button button-primary">Connect Wallet</button>
+        <div class="metric">
+          <span id="session-live-cost" class="metric-val">$0.00</span>
+          <span class="metric-lbl">Cost</span>
         </div>
-        <p id="wallet-status" class="muted-text">Wallet disconnected</p>
-        <div class="session-grid">
-          <div>
-            <p class="metric-label">Selected Node</p>
-            <p id="session-node" class="metric-value">None</p>
-          </div>
-          <div>
-            <p class="metric-label">Session Cost</p>
-            <p id="session-cost" class="metric-value">$0.00</p>
-          </div>
+        <div class="metric">
+          <span id="hero-trust" class="metric-val">--</span>
+          <span class="metric-lbl">Trust</span>
         </div>
-      </section>
+        <div class="metric">
+          <span id="hero-latency" class="metric-val">--</span>
+          <span class="metric-lbl">Latency</span>
+        </div>
+      </div>
+      <p id="selected-details" class="detail-line">Select a relay to view verification details.</p>
 
-      <section class="card nodes-card">
-        <div class="section-heading">
-          <h2>Available Relays</h2>
-          <span class="badge badge-secondary">Live data</span>
+      <div class="divider"></div>
+
+      <div class="gemini-section">
+        <div class="gemini-row">
+          <span class="section-label">Gemini</span>
+          <div class="gemini-content">
+            <span id="recommended-node" class="gemini-node">—</span>
+            <span id="recommended-score" class="trust-val">--</span>
+            <span id="recommended-latency" class="muted">--</span>
+          </div>
+          <span id="recommended-badge" style="display:none"></span>
+          <button id="use-recommendation" class="btn btn-ghost">Use</button>
         </div>
-        <div id="nodes-list" class="node-list"></div>
-      </section>
+        <p id="recommended-reason" class="detail-line">Finding best relay…</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="relay-section">
+        <div class="relay-header">
+          <span class="section-label">Relays</span>
+          <span class="badge-live">Live</span>
+        </div>
+        <div id="nodes-list"></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <footer class="footer">
+        <div class="wallet-area">
+          <span class="section-label">Phantom</span>
+          <span id="wallet-status" class="muted">Disconnected</span>
+        </div>
+        <div class="footer-actions">
+          <button id="wallet-button" class="btn btn-ghost">Connect</button>
+          <button id="end-session-button" class="btn btn-danger" disabled>End session</button>
+        </div>
+      </footer>
+
+      <!-- State elements used by popup.js, not shown directly -->
+      <span id="session-node" style="display:none"></span>
+      <span id="session-cost" style="display:none"></span>
+      <span id="session-bot-risk" style="display:none"></span>
+      <span id="session-human-lane" style="display:none"></span>
+      <span id="footer-cost" style="display:none"></span>
     </div>
 
     <script src="relayNodes.js"></script>
