@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SalusVPN</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div>
+          <p class="eyebrow">SalusVPN</p>
+          <h1>Trusted VPN Infrastructure</h1>
+        </div>
+      </header>
+
+      <section class="card summary-card">
+        <div class="section-heading">
+          <h2>Gemini Recommendation</h2>
+          <span id="recommended-badge" class="badge"></span>
+        </div>
+        <p id="recommended-reason" class="muted-text"></p>
+        <div class="metric-grid">
+          <div>
+            <p class="metric-label">Node</p>
+            <p id="recommended-node" class="metric-value"></p>
+          </div>
+          <div>
+            <p class="metric-label">Trust Score</p>
+            <p id="recommended-score" class="metric-value"></p>
+          </div>
+          <div>
+            <p class="metric-label">Latency</p>
+            <p id="recommended-latency" class="metric-value"></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card wallet-card">
+        <div class="section-heading">
+          <h2>Wallet & Session</h2>
+        </div>
+        <div class="wallet-row">
+          <span>Phantom</span>
+          <button id="wallet-button" class="button button-primary">Connect Wallet</button>
+        </div>
+        <p id="wallet-status" class="muted-text">Wallet disconnected</p>
+        <div class="session-grid">
+          <div>
+            <p class="metric-label">Selected Node</p>
+            <p id="session-node" class="metric-value">None</p>
+          </div>
+          <div>
+            <p class="metric-label">Session Cost</p>
+            <p id="session-cost" class="metric-value">$0.00</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card nodes-card">
+        <div class="section-heading">
+          <h2>Available Relays</h2>
+          <span class="badge badge-secondary">Live data</span>
+        </div>
+        <div id="nodes-list" class="node-list"></div>
+      </section>
+    </div>
+
+    <script src="relayNodes.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>
