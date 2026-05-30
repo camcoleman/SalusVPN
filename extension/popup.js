@@ -1,44 +1,58 @@
-const nodeList        = document.getElementById("nodes-list");
-const walletButton    = document.getElementById("wallet-button");
-const walletStatus    = document.getElementById("wallet-status");
-const recommendedBadge   = document.getElementById("recommended-badge");
-const recommendedNode    = document.getElementById("recommended-node");
-const recommendedScore   = document.getElementById("recommended-score");
+const nodeList = document.getElementById("nodes-list");
+const walletButton = document.getElementById("wallet-button");
+const walletStatus = document.getElementById("wallet-status");
+const walletNameEl = document.getElementById("wallet-name");
+const walletHint = document.getElementById("wallet-hint");
+const settlementMessage = document.getElementById("settlement-message");
+const settleDashboardButton = document.getElementById("settle-dashboard-button");
+const recommendedBadge = document.getElementById("recommended-badge");
+const recommendedNode = document.getElementById("recommended-node");
+const recommendedScore = document.getElementById("recommended-score");
 const recommendedLatency = document.getElementById("recommended-latency");
-const recommendedReason  = document.getElementById("recommended-reason");
-const sessionNode     = document.getElementById("session-node");
-const sessionCost     = document.getElementById("session-cost");
-const connectPill     = document.getElementById("connect-pill");
-const statusText      = document.getElementById("status-text");
-const statusRelay     = document.getElementById("status-relay");
-const sessionButton   = document.getElementById("session-button");
-const sessionTimer    = document.getElementById("session-timer");
+const recommendedReason = document.getElementById("recommended-reason");
+const sessionNode = document.getElementById("session-node");
+const sessionCost = document.getElementById("session-cost");
+const connectPill = document.getElementById("connect-pill");
+const statusText = document.getElementById("status-text");
+const statusRelay = document.getElementById("status-relay");
+const sessionButton = document.getElementById("session-button");
+const sessionTimer = document.getElementById("session-timer");
 const sessionLiveCost = document.getElementById("session-live-cost");
 const selectedDetails = document.getElementById("selected-details");
 const useRecommendationBtn = document.getElementById("use-recommendation");
 const endSessionButton = document.getElementById("end-session-button");
-const footerCost      = document.getElementById("footer-cost");
-const sessionBotRisk  = document.getElementById("session-bot-risk");
+const footerCost = document.getElementById("footer-cost");
+const sessionBotRisk = document.getElementById("session-bot-risk");
 const sessionHumanLane = document.getElementById("session-human-lane");
-const heroTrust       = document.getElementById("hero-trust");
-const heroLatency     = document.getElementById("hero-latency");
+const heroTrust = document.getElementById("hero-trust");
+const heroLatency = document.getElementById("hero-latency");
 
-let selectedRelay  = null;
-let sessionActive  = false;
+let selectedRelay = null;
+let sessionActive = false;
 let sessionSeconds = 0;
 let sessionInterval = null;
-const liveCostRate = 0.0002;
+let activeSessionId = null;
+
+let walletState = {
+  walletConnected: false,
+  walletPublicKey: null,
+  walletName: null,
+};
 
 const regionEmoji = {
-  "US East":   "🇺🇸",
-  "US West":   "🇺🇸",
-  "EU West":   "🇪🇺",
-  "EU Central":"🇩🇪",
-  APAC:        "🌏",
+  "US East": "🇺🇸",
+  "US West": "🇺🇸",
+  "EU West": "🇪🇺",
+  "EU Central": "🇩🇪",
+  APAC: "🌏",
 };
 
 function formatCurrency(value) {
   return `$${value.toFixed(4)}`;
+}
+
+function shortenAddress(address) {
+  return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
 function getBestNode(nodes) {
@@ -72,89 +86,264 @@ function getTrustClass(score) {
   return "trust-red";
 }
 
+function isWalletReady() {
+  return Boolean(walletState.walletConnected && walletState.walletPublicKey);
+}
+
 function buildReason(node) {
   const parts = [];
   if (node.verified) parts.push(`verified ${formatAge(node.lastVerified)}`);
   if (node.humanLaneAvailable) parts.push("human lane");
   if (node.latency < 30) parts.push("low latency");
-  parts.push(node.trafficQualityScore >= 90 ? "excellent traffic" : "good traffic");
+  parts.push(
+    node.trafficQualityScore >= 90 ? "excellent traffic" : "good traffic"
+  );
   return parts.join(" · ");
 }
 
 function updateRecommendation(node) {
   recommendedBadge.textContent = node.verified ? "Best Overall" : "High Trust";
-  recommendedNode.textContent  = node.name;
+  recommendedNode.textContent = node.name;
   recommendedScore.textContent = `${node.trustScore}`;
-  recommendedScore.className   = `trust-val ${getTrustClass(node.trustScore)}`;
+  recommendedScore.className = `trust-val ${getTrustClass(node.trustScore)}`;
   recommendedLatency.textContent = `${node.latency}ms`;
-  recommendedReason.textContent  = buildReason(node);
+  recommendedReason.textContent = buildReason(node);
 }
 
 function updateSelectedDetails() {
   if (!selectedRelay) {
-    heroTrust.textContent  = "—";
-    heroTrust.className    = "mstat-val";
+    heroTrust.textContent = "—";
+    heroTrust.className = "mstat-val";
     heroLatency.textContent = "—";
-    sessionBotRisk.textContent  = "--";
+    sessionBotRisk.textContent = "--";
     sessionHumanLane.textContent = "--";
-    selectedDetails.textContent = "Select a relay to view verification details.";
+    selectedDetails.textContent =
+      "Select a relay to view verification details.";
     statusRelay.textContent = "No relay selected";
     return;
   }
 
-  heroTrust.textContent  = `${selectedRelay.trustScore}`;
-  heroTrust.className    = `mstat-val ${getTrustClass(selectedRelay.trustScore)}`;
+  heroTrust.textContent = `${selectedRelay.trustScore}`;
+  heroTrust.className = `mstat-val ${getTrustClass(selectedRelay.trustScore)}`;
   heroLatency.textContent = `${selectedRelay.latency}ms`;
-  sessionBotRisk.textContent   = `${selectedRelay.botRiskScore}%`;
-  sessionHumanLane.textContent = selectedRelay.humanLaneAvailable ? "Available" : "Unavailable";
-  selectedDetails.textContent  = `Verified ${formatAge(selectedRelay.lastVerified)} · Hash ${formatShortHash(selectedRelay.attestationHash)} · ${selectedRelay.humanLaneAvailable ? "Human lane" : "Standard lane"} · Bot risk ${selectedRelay.botRiskScore}%`;
+  sessionBotRisk.textContent = `${selectedRelay.botRiskScore}%`;
+  sessionHumanLane.textContent = selectedRelay.humanLaneAvailable
+    ? "Available"
+    : "Unavailable";
+  selectedDetails.textContent = `Verified ${formatAge(selectedRelay.lastVerified)} · Hash ${formatShortHash(selectedRelay.attestationHash)} · ${selectedRelay.humanLaneAvailable ? "Human lane" : "Standard lane"} · Bot risk ${selectedRelay.botRiskScore}%`;
+}
+
+function updateWalletUI() {
+  if (isWalletReady()) {
+    walletStatus.textContent = `Connected · ${shortenAddress(walletState.walletPublicKey)}`;
+    walletNameEl.textContent = `${walletState.walletName ?? "Wallet"} · Solana Devnet`;
+    walletNameEl.style.display = "block";
+    walletHint.textContent = "Wallet synced from dashboard.";
+    walletButton.textContent = "Open Dashboard";
+  } else {
+    walletStatus.textContent = "Not connected";
+    walletNameEl.style.display = "none";
+    walletHint.textContent =
+      "Connect wallet on the dashboard to start a session.";
+    walletButton.textContent = "Open Dashboard to Connect";
+  }
 }
 
 function updateConnectionUI() {
   statusText.textContent = sessionActive ? "Connected" : "Disconnected";
-  connectPill.classList.toggle("pill--on",  sessionActive);
+  connectPill.classList.toggle("pill--on", sessionActive);
   connectPill.classList.toggle("pill--off", !sessionActive);
-  sessionButton.textContent = sessionActive ? "Pause" : "Start";
+  sessionButton.textContent = sessionActive ? "Active" : "Start";
+  sessionButton.disabled =
+    sessionActive || !isWalletReady() || !selectedRelay;
   endSessionButton.disabled = !sessionActive;
 }
 
 function updateTimer() {
   sessionTimer.textContent = formatDuration(sessionSeconds);
-  const liveCost = selectedRelay ? sessionSeconds * liveCostRate : 0;
+
+  let liveCost = 0;
+  if (selectedRelay) {
+    const metrics = getSessionMetrics(
+      sessionSeconds,
+      selectedRelay.pricePerSession
+    );
+    liveCost = metrics.accruedCostUSDC;
+  }
+
   sessionLiveCost.textContent = formatCurrency(liveCost);
   footerCost.textContent = formatCurrency(liveCost);
   chrome.storage.local.set({ sessionSeconds });
 }
 
-function startSession() {
-  if (!selectedRelay) return;
+function loadWalletState() {
+  chrome.storage.local.get(
+    [
+      "walletConnected",
+      "walletPublicKey",
+      "walletName",
+      "pendingSettlementSessionId",
+    ],
+    (result) => {
+      walletState = {
+        walletConnected: Boolean(result.walletConnected),
+        walletPublicKey: result.walletPublicKey ?? null,
+        walletName: result.walletName ?? null,
+      };
+      updateWalletUI();
+      updateConnectionUI();
 
-  sessionActive = true;
-  chrome.storage.local.set({ sessionActive: true });
-  updateConnectionUI();
-  updateTimer();
-
-  if (sessionInterval) clearInterval(sessionInterval);
-  sessionInterval = setInterval(() => {
-    sessionSeconds += 1;
-    updateTimer();
-  }, 1000);
+      if (result.pendingSettlementSessionId) {
+        settlementMessage.style.display = "block";
+        settlementMessage.textContent =
+          "Session ended. Complete USDC settlement on the dashboard.";
+        settleDashboardButton.style.display = "block";
+      } else {
+        settlementMessage.style.display = "none";
+        settleDashboardButton.style.display = "none";
+      }
+    }
+  );
 }
 
-function stopSession(reset = false) {
-  sessionActive = false;
-  chrome.storage.local.set({ sessionActive: false });
-  updateConnectionUI();
+function watchWalletState() {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
 
+    if (
+      changes.walletConnected ||
+      changes.walletPublicKey ||
+      changes.walletName
+    ) {
+      loadWalletState();
+    }
+  });
+}
+
+function openDashboardConnect() {
+  const dashboardUrl = `${DASHBOARD_URL}/#session`;
+
+  chrome.tabs.query({}, (tabs) => {
+    const existing = tabs.find(
+      (tab) =>
+        tab.url &&
+        (tab.url.startsWith(DASHBOARD_URL) ||
+          tab.url.startsWith("http://127.0.0.1:3000"))
+    );
+
+    if (existing?.id) {
+      chrome.tabs.update(existing.id, { active: true, url: dashboardUrl });
+      return;
+    }
+
+    chrome.tabs.create({ url: dashboardUrl });
+  });
+}
+
+async function startSession() {
+  if (!selectedRelay) {
+    walletHint.textContent = "Select a relay before starting.";
+    return;
+  }
+
+  if (!isWalletReady()) {
+    walletHint.textContent = "Connect wallet on dashboard first.";
+    openDashboardConnect();
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/api/session/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selectedNodeId: selectedRelay.id }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || "Failed to start session");
+    }
+
+    const data = await response.json();
+    activeSessionId = data.sessionId;
+    sessionActive = true;
+    sessionSeconds = 0;
+
+    chrome.storage.local.set({
+      sessionActive: true,
+      activeSessionId: data.sessionId,
+      pendingSettlementSessionId: null,
+    });
+
+    settlementMessage.style.display = "none";
+    settleDashboardButton.style.display = "none";
+
+    updateConnectionUI();
+    updateTimer();
+
+    if (sessionInterval) clearInterval(sessionInterval);
+    sessionInterval = setInterval(() => {
+      sessionSeconds += 1;
+      updateTimer();
+    }, 1000);
+  } catch (error) {
+    walletHint.textContent =
+      error instanceof Error ? error.message : "Failed to start session.";
+  }
+}
+
+async function endSession() {
   if (sessionInterval) {
     clearInterval(sessionInterval);
     sessionInterval = null;
   }
 
-  if (reset) {
-    sessionSeconds = 0;
-    updateTimer();
+  if (activeSessionId && selectedRelay) {
+    const metrics = getSessionMetrics(
+      sessionSeconds,
+      selectedRelay.pricePerSession
+    );
+
+    try {
+      const response = await fetch(`${API_BASE}/api/session/end`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: activeSessionId,
+          selectedNodeId: selectedRelay.id,
+          bandwidthUsedMB: metrics.bandwidthMB,
+          accruedCostUSDC: metrics.accruedCostUSDC,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to end session");
+      }
+
+      chrome.storage.local.set({
+        pendingSettlementSessionId: activeSessionId,
+      });
+
+      settlementMessage.style.display = "block";
+      settlementMessage.textContent =
+        "Session ended. Open dashboard to complete USDC settlement.";
+      settleDashboardButton.style.display = "block";
+    } catch (error) {
+      walletHint.textContent =
+        error instanceof Error ? error.message : "Failed to end session.";
+    }
   }
+
+  sessionActive = false;
+  activeSessionId = null;
+
+  chrome.storage.local.set({
+    sessionActive: false,
+    activeSessionId: null,
+  });
+
+  updateConnectionUI();
 }
 
 function setSelectedNode(node, persist = true) {
@@ -201,73 +390,52 @@ function refreshNodeList(nodes) {
   nodes.forEach((node) => nodeList.appendChild(renderNodeRow(node)));
 }
 
-async function isWalletConnected() {
-  if (!window.solana || !window.solana.isPhantom) return false;
-  try {
-    const response = await window.solana.connect({ onlyIfTrusted: true });
-    return !!response?.publicKey;
-  } catch {
-    return false;
-  }
-}
-
-async function updateWalletStatus() {
-  const connected = await isWalletConnected();
-  walletStatus.textContent = connected ? "Connected" : "Disconnected";
-  walletButton.textContent = connected ? "Disconnect" : "Connect";
-}
-
-async function toggleWallet() {
-  if (!window.solana || !window.solana.isPhantom) {
-    walletStatus.textContent = "Phantom not detected";
-    return;
-  }
-
-  try {
-    if (walletButton.textContent === "Disconnect") {
-      await window.solana.disconnect();
-      walletStatus.textContent = "Disconnected";
-      walletButton.textContent = "Connect";
-      return;
-    }
-
-    const response = await window.solana.connect();
-    walletStatus.textContent = `${response.publicKey.toString().slice(0, 8)}…`;
-    walletButton.textContent = "Disconnect";
-  } catch {
-    walletStatus.textContent = "Connection failed";
-  }
-}
-
 function restoreState(nodes) {
-  chrome.storage.local.get(["selectedRelay", "sessionActive", "sessionSeconds"], (result) => {
-    if (result.selectedRelay) {
-      const selected = nodes.find((node) => node.id === result.selectedRelay);
-      if (selected) setSelectedNode(selected, false);
+  chrome.storage.local.get(
+    ["selectedRelay", "sessionActive", "sessionSeconds", "activeSessionId"],
+    (result) => {
+      if (result.selectedRelay) {
+        const selected = nodes.find((node) => node.id === result.selectedRelay);
+        if (selected) setSelectedNode(selected, false);
+      }
+
+      sessionActive = result.sessionActive || false;
+      sessionSeconds = result.sessionSeconds || 0;
+      activeSessionId = result.activeSessionId || null;
+      updateConnectionUI();
+
+      if (sessionActive && isWalletReady()) {
+        if (sessionInterval) clearInterval(sessionInterval);
+        sessionInterval = setInterval(() => {
+          sessionSeconds += 1;
+          updateTimer();
+        }, 1000);
+        updateTimer();
+      } else if (sessionActive) {
+        sessionActive = false;
+        chrome.storage.local.set({ sessionActive: false });
+        updateConnectionUI();
+      } else {
+        updateTimer();
+      }
     }
-
-    sessionActive  = result.sessionActive  || false;
-    sessionSeconds = result.sessionSeconds || 0;
-    updateConnectionUI();
-
-    if (sessionActive) startSession();
-    else updateTimer();
-  });
+  );
 }
 
-walletButton.addEventListener("click", toggleWallet);
-sessionButton.addEventListener("click", () => {
-  if (sessionActive) stopSession(false);
-  else startSession();
-});
-useRecommendationBtn.addEventListener("click", () => setSelectedNode(getBestNode(relayNodes)));
-endSessionButton.addEventListener("click", () => stopSession(true));
+walletButton.addEventListener("click", openDashboardConnect);
+settleDashboardButton.addEventListener("click", openDashboardConnect);
+sessionButton.addEventListener("click", startSession);
+useRecommendationBtn.addEventListener("click", () =>
+  setSelectedNode(getBestNode(relayNodes))
+);
+endSessionButton.addEventListener("click", endSession);
 
 window.addEventListener("DOMContentLoaded", () => {
   if (!Array.isArray(relayNodes)) return;
   const best = getBestNode(relayNodes);
   updateRecommendation(best);
   refreshNodeList(relayNodes);
+  loadWalletState();
+  watchWalletState();
   restoreState(relayNodes);
-  updateWalletStatus();
 });
