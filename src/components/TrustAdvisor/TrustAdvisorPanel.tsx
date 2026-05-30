@@ -25,7 +25,13 @@ import type {
 /** Explicit status union so the render logic is exhaustive and predictable. */
 type Status = "idle" | "loading" | "success" | "error";
 
-export default function TrustAdvisorPanel() {
+interface TrustAdvisorPanelProps {
+  onSelectNode?: (nodeId: string) => void;
+}
+
+export default function TrustAdvisorPanel({
+  onSelectNode,
+}: TrustAdvisorPanelProps) {
   const [preference, setPreference] = useState<UserPreference | null>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [recommendation, setRecommendation] =
@@ -108,7 +114,10 @@ export default function TrustAdvisorPanel() {
         )}
 
         {status === "success" && recommendation && (
-          <RecommendationCard recommendation={recommendation} />
+          <RecommendationCard
+            recommendation={recommendation}
+            onSelectNode={onSelectNode}
+          />
         )}
       </div>
     </div>

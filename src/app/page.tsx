@@ -1,7 +1,6 @@
 import Navbar from "@/components/Navbar";
 import StatsBanner from "@/components/StatsBanner";
-import MarketplaceSection from "@/components/MarketplaceSection";
-import TrustAdvisorPanel from "@/components/TrustAdvisor/TrustAdvisorPanel";
+import DashboardClient from "@/components/DashboardClient";
 
 export default function Home() {
   return (
@@ -48,31 +47,7 @@ export default function Home() {
         <StatsBanner />
       </div>
 
-      {/* AI Trust Advisor */}
-      <section
-        id="advisor"
-        className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8"
-      >
-        <TrustAdvisorPanel />
-      </section>
-
-      {/* Marketplace + Session Panel */}
-      <section
-        id="marketplace"
-        className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8"
-      >
-        <div className="mb-8 lg:mb-10">
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Relay Marketplace
-          </h2>
-          <p className="mt-2 max-w-2xl text-muted">
-            Browse verified relay nodes with transparent trust scores, traffic
-            quality metrics, and attestation data.
-          </p>
-        </div>
-
-        <MarketplaceSection />
-      </section>
+      <DashboardClient />
     </div>
   );
 }

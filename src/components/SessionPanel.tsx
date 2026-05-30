@@ -185,6 +185,9 @@ export default function SessionPanel({ selectedNode }: SessionPanelProps) {
       setStatus("ended");
       setSettlementStatus("pending");
 
+      let finalSettlementStatus: SettlementStatus = "simulated";
+      let finalSignature: string | undefined;
+
       if (connected && publicKey && sendTransaction) {
         const result = await attemptPrototypeSettlement(
           connection,
@@ -193,10 +196,15 @@ export default function SessionPanel({ selectedNode }: SessionPanelProps) {
         );
 
         if (result.status === "settled" && result.signature) {
+          finalSettlementStatus = "settled";
+          finalSignature = result.signature;
           setSettlementStatus("settled");
           setTransactionSignature(result.signature);
-          setSettlementMessage("Prototype settlement transaction confirmed.");
+          setSettlementMessage(
+            "Prototype USDC settlement transaction confirmed."
+          );
         } else {
+          finalSettlementStatus = "simulated";
           setSettlementStatus("simulated");
           setSettlementMessage("Prototype settlement simulated.");
         }
@@ -204,6 +212,18 @@ export default function SessionPanel({ selectedNode }: SessionPanelProps) {
         setSettlementStatus("simulated");
         setSettlementMessage("Prototype settlement simulated.");
       }
+
+      await fetch("/api/session/settle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          settlementStatus: finalSettlementStatus,
+          transactionSignature: finalSignature,
+        }),
+      });
+
+      window.dispatchEvent(new CustomEvent("session-updated"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to end session");
       setSettlementStatus("failed");

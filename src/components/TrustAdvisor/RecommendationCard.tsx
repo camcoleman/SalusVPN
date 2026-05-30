@@ -10,6 +10,7 @@ import type { GeminiRecommendation } from "@/types/trustAdvisor";
 
 interface RecommendationCardProps {
   recommendation: GeminiRecommendation;
+  onSelectNode?: (nodeId: string) => void;
 }
 
 /** Small labeled metric row, matching the marketplace card's style. */
@@ -24,6 +25,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 export default function RecommendationCard({
   recommendation,
+  onSelectNode,
 }: RecommendationCardProps) {
   // Enrich with the real node record. The server already reconciled the id,
   // so this should always resolve — but we guard for missing data defensively.
@@ -90,6 +92,21 @@ export default function RecommendationCard({
           {recommendation.reason}
         </p>
       </div>
+
+      {onSelectNode && (
+        <button
+          type="button"
+          onClick={() => {
+            onSelectNode(recommendation.recommendedNodeId);
+            document
+              .getElementById("marketplace")
+              ?.scrollIntoView({ behavior: "smooth" });
+          }}
+          className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-lg bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent/90"
+        >
+          Use Recommended Node
+        </button>
+      )}
     </article>
   );
 }
