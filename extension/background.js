@@ -1,5 +1,7 @@
 importScripts("config.js");
 
+const BRIDGE_PAGE_URL = "https://solana.com";
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({ selectedRelay: null }, () => {
     console.log("SalusVPN extension installed and storage initialized.");
@@ -8,7 +10,12 @@ chrome.runtime.onInstalled.addListener(() => {
 
 function isInjectableUrl(url) {
   if (!url) return false;
-  return url.startsWith("http://") || url.startsWith("https://");
+  try {
+    const { protocol } = new URL(url);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function isLocalDashboardUrl(url) {
@@ -55,17 +62,26 @@ async function resolveDashboardBase() {
   return DASHBOARD_URL;
 }
 
-function waitForTabReady(tabId) {
-  return new Promise((resolve) => {
+function waitForTabReady(tabId, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      reject(new Error("Timed out waiting for page to load."));
+    }, timeoutMs);
+
     const listener = (updatedTabId, info) => {
       if (updatedTabId === tabId && info.status === "complete") {
+        clearTimeout(timeout);
         chrome.tabs.onUpdated.removeListener(listener);
         resolve();
       }
     };
+
     chrome.tabs.onUpdated.addListener(listener);
     chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) return;
       if (tab?.status === "complete") {
+        clearTimeout(timeout);
         chrome.tabs.onUpdated.removeListener(listener);
         resolve();
       }
@@ -73,14 +89,24 @@ function waitForTabReady(tabId) {
   });
 }
 
-async function findInjectableTab() {
-  const [active] = await chrome.tabs.query({
-    active: true,
-    lastFocusedWindow: true,
+async function createBridgeTab() {
+  const tab = await chrome.tabs.create({
+    url: BRIDGE_PAGE_URL,
+    active: false,
   });
 
-  if (active?.id && isInjectableUrl(active.url)) {
-    return { tabId: active.id, created: false };
+  if (!tab?.id) {
+    throw new Error("Could not open a page to connect your wallet.");
+  }
+
+  await waitForTabReady(tab.id);
+  await new Promise((r) => setTimeout(r, 300));
+  return tab.id;
+}
+
+async function resolveConnectTabId(tabId, tabUrl) {
+  if (tabId && isInjectableUrl(tabUrl)) {
+    return tabId;
   }
 
   const candidates = await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] });
@@ -92,33 +118,23 @@ async function findInjectableTab() {
   );
 
   if (preferred?.id) {
-    await chrome.tabs.update(preferred.id, { active: true });
-    return { tabId: preferred.id, created: false };
+    return preferred.id;
   }
 
-  const tab = await chrome.tabs.create({
-    url: "https://solana.com",
-    active: false,
-  });
-
-  if (!tab?.id) throw new Error("Could not open a page for wallet connection.");
-
-  await waitForTabReady(tab.id);
-  return { tabId: tab.id, created: true };
+  return createBridgeTab();
 }
 
-async function saveWalletState(result) {
-  await chrome.storage.local.set({
-    walletConnected: true,
-    walletPublicKey: result.publicKey,
-    walletName: result.walletName,
-    walletSyncedAt: new Date().toISOString(),
+function showConnectNotification(walletName) {
+  chrome.notifications.create(`salus-connect-${Date.now()}`, {
+    type: "basic",
+    iconUrl: "icons/icon128.png",
+    title: "SalusVPN — Approve wallet",
+    message: `Confirm the connection in the ${walletName} window (check your toolbar).`,
+    priority: 2,
   });
 }
 
-async function connectWalletViaProvider(walletName) {
-  const { tabId } = await findInjectableTab();
-
+async function injectWalletConnect(tabId, walletName) {
   await chrome.scripting.executeScript({
     target: { tabId },
     files: ["inpage-wallet.js"],
@@ -130,16 +146,103 @@ async function connectWalletViaProvider(walletName) {
     world: "MAIN",
     func: async (name) => {
       if (typeof window.__salusConnectWallet !== "function") {
-        throw new Error("Wallet connector failed to load.");
+        throw new Error("Wallet connector failed to load on this page.");
       }
       return window.__salusConnectWallet(name);
     },
     args: [walletName],
   });
 
+  if (injection?.error) {
+    throw new Error(injection.error.message || "Wallet injection failed.");
+  }
+
   const result = injection?.result;
   if (!result?.publicKey) {
     throw new Error("Wallet connection was cancelled or failed.");
+  }
+
+  return result;
+}
+
+async function connectViaDashboard(walletName) {
+  const base = await resolveDashboardBase();
+  const connectUrl = `${base}/connect?wallet=${encodeURIComponent(walletName)}`;
+  const tab = await chrome.tabs.create({ url: connectUrl, active: true });
+  if (!tab?.id) throw new Error("Could not open dashboard connect page.");
+
+  await waitForTabReady(tab.id);
+  await new Promise((r) => setTimeout(r, 1000));
+
+  chrome.tabs.sendMessage(tab.id, { type: "CONNECT_WALLET", walletName });
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    await new Promise((r) => setTimeout(r, 500));
+    const stored = await chrome.storage.local.get([
+      "walletConnected",
+      "walletPublicKey",
+      "walletName",
+    ]);
+    if (stored.walletConnected && stored.walletPublicKey) {
+      return {
+        publicKey: stored.walletPublicKey,
+        walletName: stored.walletName ?? walletName,
+      };
+    }
+  }
+
+  throw new Error(
+    "Dashboard connect timed out. Run npm run dev and approve in MetaMask."
+  );
+}
+
+async function saveWalletState(result) {
+  await chrome.storage.local.set({
+    walletConnected: true,
+    walletPublicKey: result.publicKey,
+    walletName: result.walletName,
+    walletSyncedAt: new Date().toISOString(),
+    walletConnecting: null,
+    walletConnectError: null,
+  });
+}
+
+async function connectWalletViaProvider(walletName, tabId, tabUrl) {
+  await chrome.storage.local.set({
+    walletConnecting: walletName,
+    walletConnectError: null,
+  });
+
+  showConnectNotification(walletName);
+
+  let result;
+  let lastError;
+
+  try {
+    const targetTabId = await resolveConnectTabId(tabId, tabUrl);
+    result = await injectWalletConnect(targetTabId, walletName);
+  } catch (err) {
+    lastError = err;
+  }
+
+  if (!result && walletName === "MetaMask") {
+    try {
+      result = await connectViaDashboard("MetaMask");
+    } catch (dashboardErr) {
+      lastError = dashboardErr;
+    }
+  }
+
+  if (!result) {
+    const message =
+      lastError instanceof Error
+        ? lastError.message
+        : "Wallet connection was cancelled or failed.";
+    await chrome.storage.local.set({
+      walletConnecting: null,
+      walletConnectError: message,
+    });
+    throw new Error(message);
   }
 
   await saveWalletState(result);
@@ -149,41 +252,37 @@ async function connectWalletViaProvider(walletName) {
 async function disconnectWalletViaProvider() {
   const stored = await chrome.storage.local.get(["walletName"]);
   const walletName = stored.walletName;
-  if (!walletName) {
-    await chrome.storage.local.set({
-      walletConnected: false,
-      walletPublicKey: null,
-      walletName: null,
-    });
-    return { ok: true };
-  }
 
-  try {
-    const { tabId } = await findInjectableTab();
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ["inpage-wallet.js"],
-      world: "MAIN",
-    });
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      world: "MAIN",
-      func: async (name) => {
-        if (typeof window.__salusDisconnectWallet === "function") {
-          return window.__salusDisconnectWallet(name);
-        }
-        return { ok: true };
-      },
-      args: [walletName],
-    });
-  } catch {
-    // Still clear local state if provider disconnect fails.
+  if (walletName) {
+    try {
+      const tabId = await resolveConnectTabId(null, null);
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ["inpage-wallet.js"],
+        world: "MAIN",
+      });
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        world: "MAIN",
+        func: async (name) => {
+          if (typeof window.__salusDisconnectWallet === "function") {
+            return window.__salusDisconnectWallet(name);
+          }
+          return { ok: true };
+        },
+        args: [walletName],
+      });
+    } catch {
+      // Clear local state even if provider disconnect fails.
+    }
   }
 
   await chrome.storage.local.set({
     walletConnected: false,
     walletPublicKey: null,
     walletName: null,
+    walletConnecting: null,
+    walletConnectError: null,
   });
 
   return { ok: true };
@@ -216,7 +315,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "CONNECT_WALLET") {
-    connectWalletViaProvider(message.walletName)
+    connectWalletViaProvider(message.walletName, message.tabId, message.tabUrl)
       .then((result) => sendResponse(result))
       .catch((err) =>
         sendResponse({
@@ -224,7 +323,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           error: err instanceof Error ? err.message : "Connect failed",
         })
       );
-    return true;
+    return true; // keep channel open until Phantom connect resolves
   }
 
   if (message.type === "DISCONNECT_WALLET") {

@@ -1,6 +1,5 @@
 /**
- * Runs in the page MAIN world (not extension isolated world).
- * Calls the wallet extension's provider so Phantom/MetaMask show their native approve UI.
+ * Runs in the page MAIN world. Triggers the wallet extension's native approve UI.
  */
 window.__salusConnectWallet = async function salusConnectWallet(walletName) {
   function pubkeyToString(key) {
@@ -11,16 +10,35 @@ window.__salusConnectWallet = async function salusConnectWallet(walletName) {
     return String(key);
   }
 
+  function getMetaMaskProvider() {
+    if (window.ethereum?.providers?.length) {
+      return window.ethereum.providers.find((p) => p.isMetaMask) ?? null;
+    }
+    return window.ethereum?.isMetaMask ? window.ethereum : null;
+  }
+
   async function connectPhantom() {
     const provider = window.phantom?.solana;
     if (!provider?.isPhantom) {
       throw new Error(
-        "Phantom extension not found. Install Phantom from the Chrome Web Store."
+        "Phantom is not installed. Add the Phantom extension from the Chrome Web Store."
       );
     }
-    const response = await provider.connect();
+
+    // Disconnect first so Phantom always shows the Connect / approve window.
+    try {
+      if (provider.isConnected) {
+        await provider.disconnect();
+      }
+    } catch {
+      // ignore disconnect errors
+    }
+
+    const response = await provider.connect({ onlyIfTrusted: false });
     const publicKey = pubkeyToString(response?.publicKey ?? provider.publicKey);
-    if (!publicKey) throw new Error("Phantom did not return a public key.");
+    if (!publicKey) {
+      throw new Error("Phantom connection was cancelled.");
+    }
     return { publicKey, walletName: "Phantom" };
   }
 
@@ -28,63 +46,109 @@ window.__salusConnectWallet = async function salusConnectWallet(walletName) {
     const provider = window.solflare;
     if (!provider?.isSolflare) {
       throw new Error(
-        "Solflare extension not found. Install Solflare from the Chrome Web Store."
+        "Solflare is not installed. Add the Solflare extension from the Chrome Web Store."
       );
     }
+
     await provider.connect();
     const publicKey = pubkeyToString(provider.publicKey);
-    if (!publicKey) throw new Error("Solflare did not return a public key.");
+    if (!publicKey) {
+      throw new Error("Solflare connection was cancelled.");
+    }
     return { publicKey, walletName: "Solflare" };
   }
 
-  async function discoverStandardWallets() {
+  async function discoverStandardWallets(maxMs) {
     const wallets = [];
+    const seen = new Set();
 
     const onRegister = (event) => {
       const register = event?.detail?.register;
-      if (typeof register === "function") {
-        register((wallet) => wallets.push(wallet));
-      }
+      if (typeof register !== "function") return;
+      register((wallet) => {
+        const id = wallet?.name ?? wallet;
+        if (!seen.has(id)) {
+          seen.add(id);
+          wallets.push(wallet);
+        }
+      });
     };
 
     window.addEventListener("wallet-standard:register-wallet", onRegister);
-    window.dispatchEvent(new CustomEvent("wallet-standard:app-ready"));
 
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    const end = Date.now() + maxMs;
+    while (Date.now() < end) {
+      window.dispatchEvent(new CustomEvent("wallet-standard:app-ready"));
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
 
     window.removeEventListener("wallet-standard:register-wallet", onRegister);
     return wallets;
   }
 
   async function connectMetaMask() {
-    const legacy = window.ethereum?.providers?.find((p) => p.isMetaMask) ??
-      (window.ethereum?.isMetaMask ? window.ethereum : null);
-
-    if (legacy?.solana?.connect) {
-      const response = await legacy.solana.connect();
-      const publicKey = pubkeyToString(
-        response?.publicKey ?? legacy.solana.publicKey
-      );
-      if (publicKey) return { publicKey, walletName: "MetaMask" };
-    }
-
-    const wallets = await discoverStandardWallets();
-    const metamask = wallets.find((w) => w.name === "MetaMask");
+    const metamask = getMetaMaskProvider();
     if (!metamask) {
       throw new Error(
-        "MetaMask Solana not found. Open MetaMask, enable Solana, and try again."
+        "MetaMask is not installed. Add MetaMask and enable Solana in Settings."
       );
     }
 
-    const connectFeature = metamask.features?.["standard:connect"];
-    if (!connectFeature?.connect) {
-      throw new Error("MetaMask does not support standard connect on this page.");
+    if (metamask.solana?.connect) {
+      try {
+        const response = await metamask.solana.connect();
+        const publicKey = pubkeyToString(
+          response?.publicKey ?? metamask.solana.publicKey
+        );
+        if (publicKey) return { publicKey, walletName: "MetaMask" };
+      } catch (err) {
+        if (err?.code !== 4001) console.warn("MetaMask solana.connect:", err);
+      }
     }
 
-    const { accounts } = await connectFeature.connect();
-    const address = accounts?.[0]?.address;
-    if (!address) throw new Error("MetaMask did not return a Solana account.");
-    return { publicKey: address, walletName: "MetaMask" };
+    if (typeof metamask.request === "function") {
+      const snapMethods = [
+        {
+          method: "wallet_invokeSnap",
+          params: {
+            snapId: "npm:@metamask/solana-wallet-snap",
+            request: { method: "connect" },
+          },
+        },
+        { method: "metamask_solana_connect", params: [] },
+        { method: "solana_connect", params: [] },
+      ];
+
+      for (const call of snapMethods) {
+        try {
+          const result = await metamask.request(call);
+          const publicKey =
+            pubkeyToString(result?.publicKey) ??
+            (Array.isArray(result) ? result[0] : null) ??
+            (typeof result === "string" ? result : null);
+          if (publicKey) return { publicKey, walletName: "MetaMask" };
+        } catch (err) {
+          if (err?.code === 4001) {
+            throw new Error("MetaMask connection was cancelled.");
+          }
+        }
+      }
+    }
+
+    const wallets = await discoverStandardWallets(2000);
+    const standard = wallets.find((w) => w.name === "MetaMask");
+    if (standard) {
+      const connectFeature = standard.features?.["standard:connect"];
+      if (connectFeature?.connect) {
+        const { accounts } = await connectFeature.connect();
+        const address = accounts?.[0]?.address;
+        if (address) return { publicKey: address, walletName: "MetaMask" };
+      }
+    }
+
+    throw new Error(
+      "MetaMask Solana is not available. In MetaMask go to Settings → enable Solana, then try again."
+    );
   }
 
   if (walletName === "Phantom") return connectPhantom();
@@ -97,16 +161,14 @@ window.__salusConnectWallet = async function salusConnectWallet(walletName) {
 window.__salusDisconnectWallet = async function salusDisconnectWallet(walletName) {
   if (walletName === "Phantom" && window.phantom?.solana?.disconnect) {
     await window.phantom.solana.disconnect();
-    return { ok: true };
   }
   if (walletName === "Solflare" && window.solflare?.disconnect) {
     await window.solflare.disconnect();
-    return { ok: true };
   }
   if (walletName === "MetaMask") {
-    const legacy = window.ethereum?.providers?.find((p) => p.isMetaMask) ??
+    const metamask = window.ethereum?.providers?.find((p) => p.isMetaMask) ??
       (window.ethereum?.isMetaMask ? window.ethereum : null);
-    if (legacy?.solana?.disconnect) await legacy.solana.disconnect();
+    if (metamask?.solana?.disconnect) await metamask.solana.disconnect();
   }
   return { ok: true };
 };
