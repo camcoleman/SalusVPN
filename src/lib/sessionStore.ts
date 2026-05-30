@@ -63,3 +63,10 @@ export function updateSettlement(
   sessions.set(sessionId, updated);
   return updated;
 }
+
+export function getSessionHistory(limit = 10): Session[] {
+  return Array.from(sessions.values())
+    .filter((session) => session.status === "ended")
+    .sort((a, b) => (b.endedAt ?? "").localeCompare(a.endedAt ?? ""))
+    .slice(0, limit);
+}
