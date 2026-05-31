@@ -1,11 +1,13 @@
 const nodeList = document.getElementById("nodes-list");
 const walletButton = document.getElementById("wallet-button");
+const walletIndicator = document.getElementById("wallet-indicator");
+const walletAddress = document.getElementById("wallet-address");
 const walletStatus = document.getElementById("wallet-status");
 const walletNameEl = document.getElementById("wallet-name");
 const walletBalanceEl = document.getElementById("wallet-balance");
 const walletHint = document.getElementById("wallet-hint");
 const walletPicker = document.getElementById("wallet-picker");
-const walletPickerCancel = document.getElementById("wallet-picker-cancel");
+const walletMenu = document.querySelector(".wallet-menu");
 const settlementMessage = document.getElementById("settlement-message");
 const settlementTxRow = document.getElementById("settlement-tx-row");
 const settlementTxLink = document.getElementById("settlement-tx-link");
@@ -19,22 +21,13 @@ const settleAllButton = document.getElementById("settle-all-button");
 const pendingError = document.getElementById("pending-error");
 const autoSettleEnabled = document.getElementById("auto-settle-enabled");
 const autoSettleThreshold = document.getElementById("auto-settle-threshold");
-const recommendedBadge = document.getElementById("recommended-badge");
-const recommendedNode = document.getElementById("recommended-node");
-const recommendedScore = document.getElementById("recommended-score");
-const recommendedLatency = document.getElementById("recommended-latency");
-const recommendedReason = document.getElementById("recommended-reason");
 const sessionNode = document.getElementById("session-node");
 const sessionCost = document.getElementById("session-cost");
-const connectPill = document.getElementById("connect-pill");
-const statusText = document.getElementById("status-text");
 const statusRelay = document.getElementById("status-relay");
 const sessionButton = document.getElementById("session-button");
-const stopSessionButton = document.getElementById("stop-session-button");
 const sessionTimer = document.getElementById("session-timer");
 const sessionLiveCost = document.getElementById("session-live-cost");
 const selectedDetails = document.getElementById("selected-details");
-const useRecommendationBtn = document.getElementById("use-recommendation");
 const endSessionButton = document.getElementById("end-session-button");
 const footerCost = document.getElementById("footer-cost");
 const sessionBotRisk = document.getElementById("session-bot-risk");
@@ -441,11 +434,6 @@ function updateLatencyDisplays() {
   if (selectedRelay) {
     heroLatency.textContent = `${getLiveLatency(selectedRelay)}ms`;
   }
-
-  const recommended = relayNodes.find((n) => n.name === recommendedNode.textContent);
-  if (recommended) {
-    recommendedLatency.textContent = `${getLiveLatency(recommended)}ms`;
-  }
 }
 
 function startLatencySimulation() {
@@ -561,15 +549,6 @@ function showAdvisorRecommendation(prefId) {
   advisorResult.hidden = false;
 }
 
-function updateRecommendation(node) {
-  recommendedBadge.textContent = node.verified ? "Best Overall" : "High Trust";
-  recommendedNode.textContent = node.name;
-  recommendedScore.textContent = `${node.trustScore}`;
-  recommendedScore.className = `trust-val ${getTrustClass(node.trustScore)}`;
-  recommendedLatency.textContent = `${getLiveLatency(node)}ms`;
-  recommendedReason.textContent = buildReason(node);
-}
-
 function updateSelectedDetails() {
   if (!selectedRelay) {
     heroTrust.textContent = "—";
@@ -594,8 +573,8 @@ function updateSelectedDetails() {
 }
 
 function showWalletPicker(show) {
+  // Sleek dropdown anchored under the header button; the button stays visible.
   walletPicker.hidden = !show;
-  walletButton.hidden = show;
 }
 
 async function fetchDevnetSolBalance(publicKey) {
@@ -638,12 +617,14 @@ async function refreshDevnetBalances() {
 
 function updateWalletUI() {
   if (isWalletReady()) {
+    // Header collapses to a green dot + shortened address while connected.
+    showWalletPicker(false);
     walletStatus.textContent = `Connected · ${shortenAddress(walletState.walletPublicKey)}`;
     walletNameEl.textContent = `${walletState.walletName ?? "Wallet"} · use Devnet in Phantom`;
     walletNameEl.style.display = "block";
-    walletButton.textContent = "Disconnect";
-    walletButton.hidden = false;
-    showWalletPicker(false);
+    walletButton.hidden = true;
+    walletIndicator.hidden = false;
+    walletAddress.textContent = shortenAddress(walletState.walletPublicKey);
     void refreshDevnetBalances();
   } else {
     walletStatus.textContent = "Not connected";
@@ -653,6 +634,7 @@ function updateWalletUI() {
       "Opens your Phantom or MetaMask approval window.";
     walletButton.textContent = "Connect Wallet";
     walletButton.hidden = false;
+    walletIndicator.hidden = true;
     showWalletPicker(false);
   }
 }
@@ -692,7 +674,8 @@ function handleWalletButtonClick() {
     disconnectWallet();
     return;
   }
-  showWalletPicker(true);
+  // Toggle the dropdown open/closed on repeated clicks.
+  showWalletPicker(walletPicker.hidden);
 }
 
 function updateIpDisplay() {
@@ -714,13 +697,9 @@ function updateIpDisplay() {
 }
 
 function updateConnectionUI() {
-  statusText.textContent = sessionActive ? "Connected" : "Disconnected";
-  connectPill.classList.toggle("pill--on", sessionActive);
-  connectPill.classList.toggle("pill--off", !sessionActive);
   sessionButton.hidden = sessionActive;
   sessionButton.disabled = !isWalletReady() || !selectedRelay;
-  stopSessionButton.hidden = !sessionActive;
-  stopSessionButton.disabled = !sessionActive;
+  endSessionButton.hidden = !sessionActive;
   endSessionButton.disabled = !sessionActive;
   updateIpDisplay();
 
@@ -1159,11 +1138,18 @@ function restoreState(nodes) {
 }
 
 walletButton.addEventListener("click", handleWalletButtonClick);
-walletPickerCancel.addEventListener("click", () => showWalletPicker(false));
+walletIndicator.addEventListener("click", handleWalletButtonClick);
 walletPicker.querySelectorAll(".wallet-option").forEach((button) => {
   button.addEventListener("click", () => {
     connectWallet(button.dataset.wallet);
   });
+});
+// Close the wallet dropdown when clicking anywhere outside the menu.
+document.addEventListener("click", (event) => {
+  if (walletPicker.hidden) return;
+  if (walletMenu && !walletMenu.contains(event.target)) {
+    showWalletPicker(false);
+  }
 });
 settleDashboardButton.addEventListener("click", openDashboardConnect);
 settleRetryButton.addEventListener("click", () => {
@@ -1179,10 +1165,6 @@ settleAllButton.addEventListener("click", () => {
 autoSettleEnabled.addEventListener("change", saveAutoSettleSettings);
 autoSettleThreshold.addEventListener("change", saveAutoSettleSettings);
 sessionButton.addEventListener("click", startSession);
-stopSessionButton.addEventListener("click", endSession);
-useRecommendationBtn.addEventListener("click", () =>
-  setSelectedNode(getBestNode(relayNodes))
-);
 endSessionButton.addEventListener("click", endSession);
 
 advisorOptions.querySelectorAll(".advisor-opt").forEach((btn) => {
@@ -1222,8 +1204,6 @@ window.addEventListener("DOMContentLoaded", () => {
     apiBase = base;
   });
   startLatencySimulation();
-  const best = getBestNode(relayNodes);
-  updateRecommendation(best);
   refreshNodeList(relayNodes);
   loadWalletState();
   loadAutoSettleSettings();

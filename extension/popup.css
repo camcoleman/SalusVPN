@@ -202,6 +202,101 @@ body {
 
 .btn--sm { padding: 5px 10px; font-size: 11px; }
 
+/* Grey "Connect Wallet" button used in the header. */
+.btn--wallet {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  box-shadow: none;
+  padding: 6px 12px;
+  font-size: 11px;
+}
+
+.btn--wallet:hover {
+  opacity: 1;
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* ── Header actions (wallet control + status pill) ─ */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wallet-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--green-dim);
+  border: 1px solid rgba(94, 201, 122, 0.3);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.wallet-indicator:hover { opacity: 0.85; }
+
+.wallet-indicator[hidden] { display: none; }
+
+.wallet-indicator-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: glow-pulse 1.8s ease-in-out infinite;
+}
+
+/* Wallet dropdown: anchored directly beneath the header button. */
+.wallet-menu {
+  position: relative;
+}
+
+.wallet-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 156px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+.wallet-dropdown[hidden] {
+  display: none;
+}
+
+.wallet-dropdown .wallet-option {
+  padding: 8px 10px;
+  font-size: 12px;
+  background: var(--surface-2);
+}
+
+/* Settlement info relocated below the pending payments card. */
+.settlement-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.settlement-tx-row {
+  margin-top: 4px;
+  padding: 0 4px;
+}
+
 /* ── Wallet picker ─────────────────────────────── */
 .wallet-picker {
   display: flex;

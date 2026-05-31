@@ -41,10 +41,29 @@
             </svg>
           </div>
 
-          <span id="connect-pill" class="status-pill pill--off">
-            <span class="pulse-dot"></span>
-            <span id="status-text">Disconnected</span>
-          </span>
+          <div class="header-actions">
+            <div class="wallet-menu">
+              <button id="wallet-button" class="btn btn--wallet">Connect Wallet</button>
+              <span id="wallet-indicator" class="wallet-indicator" hidden>
+                <span class="wallet-indicator-dot"></span>
+                <span id="wallet-address" class="wallet-indicator-addr"></span>
+              </span>
+              <div id="wallet-picker" class="wallet-dropdown" hidden>
+                <button type="button" class="wallet-option" data-wallet="Phantom">
+                  <span class="wallet-option-icon">👻</span>
+                  <span>Phantom</span>
+                </button>
+                <button type="button" class="wallet-option" data-wallet="MetaMask">
+                  <span class="wallet-option-icon">🦊</span>
+                  <span>MetaMask</span>
+                </button>
+                <button type="button" class="wallet-option" data-wallet="Solflare">
+                  <span class="wallet-option-icon">🔥</span>
+                  <span>Solflare</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </header>
       </div>
 
@@ -53,7 +72,7 @@
           <span id="status-relay" class="status-relay">No Relay Selected</span>
           <div class="session-actions">
             <button id="session-button" class="btn btn--primary">Start</button>
-            <button id="stop-session-button" class="btn btn--danger" hidden>Stop</button>
+            <button id="end-session-button" class="btn btn--danger" hidden>End</button>
           </div>
         </div>
         <div class="metrics-grid">
@@ -123,68 +142,12 @@
         </div>
       </section>
 
-      <section class="card gemini-card">
-        <div class="card-head">
-          <span class="section-label">Gemini</span>
-          <span id="recommended-badge" class="tag tag--ai">AI Pick</span>
-        </div>
-        <div class="gemini-row">
-          <span id="recommended-node" class="gemini-node">—</span>
-          <span id="recommended-score" class="trust-val">--</span>
-          <span id="recommended-latency" class="dim">--</span>
-          <button id="use-recommendation" class="btn btn--ghost btn--sm">Use</button>
-        </div>
-        <p id="recommended-reason" class="detail-line">Finding best relay…</p>
-      </section>
-
       <section class="card relays-card">
         <div class="card-head">
           <span class="section-label">Relays</span>
           <span class="tag tag--live">Live</span>
         </div>
         <div id="nodes-list"></div>
-      </section>
-
-      <section class="card wallet-card">
-        <div class="wallet-row">
-          <div>
-            <span class="section-label">Wallet</span>
-            <p id="wallet-status" class="detail-line">Not connected</p>
-            <p id="wallet-name" class="detail-line dim" style="display:none"></p>
-            <p id="wallet-balance" class="detail-line dim" style="display:none"></p>
-          </div>
-          <div class="wallet-actions">
-            <button id="wallet-button" class="btn btn--ghost">Open Dashboard</button>
-            <button id="end-session-button" class="btn btn--danger" disabled>End</button>
-          </div>
-        </div>
-        <p id="wallet-hint" class="detail-line dim">Switch wallet to Solana Devnet. SOL: faucet.solana.com · USDC: spl-token-faucet.com</p>
-        <div id="wallet-picker" class="wallet-picker" hidden>
-          <p class="wallet-picker-title">Connect wallet</p>
-          <button type="button" class="wallet-option" data-wallet="Phantom">
-            <span class="wallet-option-icon">👻</span>
-            <span>Phantom</span>
-          </button>
-          <button type="button" class="wallet-option" data-wallet="MetaMask">
-            <span class="wallet-option-icon">🦊</span>
-            <span>MetaMask</span>
-          </button>
-          <button type="button" class="wallet-option" data-wallet="Solflare">
-            <span class="wallet-option-icon">🔥</span>
-            <span>Solflare</span>
-          </button>
-          <button type="button" id="wallet-picker-cancel" class="btn btn--ghost btn--sm wallet-picker-cancel">Cancel</button>
-        </div>
-        <p id="settlement-message" class="detail-line dim" style="display:none"></p>
-        <p id="settlement-tx-row" class="detail-line dim" style="display:none">
-          Tx: <a id="settlement-tx-link" href="#" target="_blank" rel="noopener noreferrer"></a>
-        </p>
-        <button id="settle-retry-button" class="btn btn--ghost btn--sm" style="display:none; margin-top:8px; width:100%">
-          Retry settlement
-        </button>
-        <button id="settle-dashboard-button" class="btn btn--ghost btn--sm" style="display:none; margin-top:8px; width:100%">
-          Settle on dashboard (fallback)
-        </button>
       </section>
 
       <section class="card pending-card" id="pending-card">
@@ -214,6 +177,29 @@
           <span class="auto-settle-suffix">sessions</span>
         </div>
       </section>
+
+      <div class="settlement-info">
+        <p id="settlement-message" class="detail-line dim" style="display:none"></p>
+        <p id="settlement-tx-row" class="detail-line dim settlement-tx-row" style="display:none">
+          Tx: <a id="settlement-tx-link" href="#" target="_blank" rel="noopener noreferrer"></a>
+        </p>
+        <button id="settle-retry-button" class="btn btn--ghost btn--sm" style="display:none; margin-top:8px; width:100%">
+          Retry settlement
+        </button>
+        <button id="settle-dashboard-button" class="btn btn--ghost btn--sm" style="display:none; margin-top:8px; width:100%">
+          Settle on dashboard (fallback)
+        </button>
+      </div>
+
+      <!-- Hidden wallet status placeholders: the WALLET card was removed, but
+           the connection logic still writes to these nodes. The parent stays
+           display:none so nothing renders regardless of inline style changes. -->
+      <div style="display:none" aria-hidden="true">
+        <p id="wallet-status"></p>
+        <p id="wallet-name"></p>
+        <p id="wallet-balance"></p>
+        <p id="wallet-hint"></p>
+      </div>
 
       <span id="session-node"       style="display:none"></span>
       <span id="session-cost"       style="display:none"></span>
