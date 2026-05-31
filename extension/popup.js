@@ -30,6 +30,7 @@ const connectPill = document.getElementById("connect-pill");
 const statusText = document.getElementById("status-text");
 const statusRelay = document.getElementById("status-relay");
 const sessionButton = document.getElementById("session-button");
+const stopSessionButton = document.getElementById("stop-session-button");
 const sessionTimer = document.getElementById("session-timer");
 const sessionLiveCost = document.getElementById("session-live-cost");
 const selectedDetails = document.getElementById("selected-details");
@@ -526,9 +527,10 @@ function updateConnectionUI() {
   statusText.textContent = sessionActive ? "Connected" : "Disconnected";
   connectPill.classList.toggle("pill--on", sessionActive);
   connectPill.classList.toggle("pill--off", !sessionActive);
-  sessionButton.textContent = sessionActive ? "Active" : "Start";
-  sessionButton.disabled =
-    sessionActive || !isWalletReady() || !selectedRelay;
+  sessionButton.hidden = sessionActive;
+  sessionButton.disabled = !isWalletReady() || !selectedRelay;
+  stopSessionButton.hidden = !sessionActive;
+  stopSessionButton.disabled = !sessionActive;
   endSessionButton.disabled = !sessionActive;
 }
 
@@ -980,6 +982,7 @@ settleAllButton.addEventListener("click", () => {
 autoSettleEnabled.addEventListener("change", saveAutoSettleSettings);
 autoSettleThreshold.addEventListener("change", saveAutoSettleSettings);
 sessionButton.addEventListener("click", startSession);
+stopSessionButton.addEventListener("click", endSession);
 useRecommendationBtn.addEventListener("click", () =>
   setSelectedNode(getBestNode(relayNodes))
 );

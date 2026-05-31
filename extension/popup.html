@@ -51,7 +51,10 @@
       <section class="card status-card">
         <div class="status-row">
           <span id="status-relay" class="status-relay">No Relay Selected</span>
-          <button id="session-button" class="btn btn--primary">Start</button>
+          <div class="session-actions">
+            <button id="session-button" class="btn btn--primary">Start</button>
+            <button id="stop-session-button" class="btn btn--danger" hidden>Stop</button>
+          </div>
         </div>
         <div class="metrics-grid">
           <div class="mstat">
