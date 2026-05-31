@@ -37,6 +37,7 @@ const heroLatency = document.getElementById("hero-latency");
 const ipDisplay = document.getElementById("ip-display");
 const ipDisplayLabel = document.getElementById("ip-display-label");
 const ipDisplayValue = document.getElementById("ip-display-value");
+const ipDisplayToggle = document.getElementById("ip-display-toggle");
 const botsBlocked = document.getElementById("bots-blocked");
 const botsBlockedValue = document.getElementById("bots-blocked-value");
 const advisorOptions = document.getElementById("advisor-options");
@@ -49,6 +50,10 @@ const advisorUse = document.getElementById("advisor-use");
 // Static mock "real" IP shown while disconnected. Demo-only — never fetched
 // or used for real routing; just simulates VPN behavior for the demo.
 const EXPOSED_DEMO_IP = "192.168.1.47";
+const IP_MASK_TEXT = "•••.•••.•••.•••";
+
+let ipAddressHidden = false;
+let currentDisplayIp = EXPOSED_DEMO_IP;
 
 let selectedRelay = null;
 let sessionActive = false;
@@ -305,14 +310,17 @@ async function parseJsonResponse(response) {
 
 function clearLocalSession() {
   sessionActive = false;
+  sessionSeconds = 0;
   activeSessionId = null;
   chrome.storage.local.set({
     sessionActive: false,
     activeSessionId: null,
+    sessionSeconds: 0,
     walletSessionSigned: false,
     walletSessionSignature: null,
   });
   updateConnectionUI();
+  updateTimer();
 }
 
 async function validateStoredSession(sessionId) {
@@ -678,6 +686,25 @@ function handleWalletButtonClick() {
   showWalletPicker(walletPicker.hidden);
 }
 
+function renderIpValueText() {
+  if (!ipDisplayValue) return;
+  ipDisplayValue.textContent = ipAddressHidden ? IP_MASK_TEXT : currentDisplayIp;
+}
+
+function updateIpToggleButton() {
+  if (!ipDisplayToggle) return;
+
+  ipDisplayToggle.classList.toggle("ip-display-toggle--masked", ipAddressHidden);
+  const label = ipAddressHidden ? "Show IP" : "Hide IP";
+  ipDisplayToggle.title = label;
+  ipDisplayToggle.setAttribute("aria-label", label);
+}
+
+function setCurrentDisplayIp(ip) {
+  currentDisplayIp = ip;
+  renderIpValueText();
+}
+
 function updateIpDisplay() {
   if (!ipDisplay) return;
 
@@ -687,13 +714,30 @@ function updateIpDisplay() {
     ipDisplay.classList.remove("ip-display--exposed");
     ipDisplay.classList.add("ip-display--protected");
     ipDisplayLabel.textContent = "Your IP (Protected)";
-    ipDisplayValue.textContent = protectedIp;
+    setCurrentDisplayIp(protectedIp);
   } else {
     ipDisplay.classList.remove("ip-display--protected");
     ipDisplay.classList.add("ip-display--exposed");
     ipDisplayLabel.textContent = "Your IP (Exposed)";
-    ipDisplayValue.textContent = EXPOSED_DEMO_IP;
+    setCurrentDisplayIp(EXPOSED_DEMO_IP);
   }
+
+  updateIpToggleButton();
+}
+
+function loadIpDisplayPreference() {
+  chrome.storage.local.get(["ipAddressHidden"], (result) => {
+    ipAddressHidden = Boolean(result.ipAddressHidden);
+    renderIpValueText();
+    updateIpToggleButton();
+  });
+}
+
+function toggleIpVisibility() {
+  ipAddressHidden = !ipAddressHidden;
+  chrome.storage.local.set({ ipAddressHidden });
+  renderIpValueText();
+  updateIpToggleButton();
 }
 
 function updateConnectionUI() {
@@ -711,10 +755,11 @@ function updateConnectionUI() {
 }
 
 function updateTimer() {
-  sessionTimer.textContent = formatDuration(sessionSeconds);
+  const displaySeconds = sessionActive ? sessionSeconds : 0;
+  sessionTimer.textContent = formatDuration(displaySeconds);
 
   let liveCost = 0;
-  if (selectedRelay) {
+  if (sessionActive && selectedRelay) {
     const metrics = getSessionMetrics(
       sessionSeconds,
       selectedRelay.pricePerSession
@@ -801,6 +846,10 @@ function watchSessionState() {
 
     if (changes.sessionActive) {
       sessionActive = Boolean(changes.sessionActive.newValue);
+      if (!sessionActive) {
+        sessionSeconds = 0;
+        updateTimer();
+      }
       updateConnectionUI();
     }
   });
@@ -1011,14 +1060,17 @@ async function endSession() {
           String(data.error ?? "").includes("already ended")
         ) {
           sessionActive = false;
+          sessionSeconds = 0;
           activeSessionId = null;
           chrome.storage.local.set({
             sessionActive: false,
             activeSessionId: null,
+            sessionSeconds: 0,
             walletSessionSigned: false,
             walletSessionSignature: null,
           });
           updateConnectionUI();
+          updateTimer();
           await loadPendingQueue();
           await maybeAutoSettle();
           return;
@@ -1027,14 +1079,17 @@ async function endSession() {
       }
 
       sessionActive = false;
+      sessionSeconds = 0;
       activeSessionId = null;
       chrome.storage.local.set({
         sessionActive: false,
         activeSessionId: null,
+        sessionSeconds: 0,
         walletSessionSigned: false,
         walletSessionSignature: null,
       });
       updateConnectionUI();
+      updateTimer();
 
       walletHint.textContent =
         "Session queued for batch settlement. Settle when ready or enable auto-settle.";
@@ -1048,16 +1103,19 @@ async function endSession() {
   }
 
   sessionActive = false;
+  sessionSeconds = 0;
   activeSessionId = null;
 
   chrome.storage.local.set({
     sessionActive: false,
     activeSessionId: null,
+    sessionSeconds: 0,
     walletSessionSigned: false,
     walletSessionSignature: null,
   });
 
   updateConnectionUI();
+  updateTimer();
 }
 
 function setSelectedNode(node, persist = true) {
@@ -1114,17 +1172,27 @@ function restoreState(nodes) {
       }
 
       sessionActive = result.sessionActive || false;
-      sessionSeconds = result.sessionSeconds || 0;
       activeSessionId = result.activeSessionId || null;
+
+      if (sessionActive) {
+        sessionSeconds = result.sessionSeconds || 0;
+      } else {
+        sessionSeconds = 0;
+        if (result.sessionSeconds) {
+          chrome.storage.local.set({ sessionSeconds: 0 });
+        }
+      }
 
       if (sessionActive && activeSessionId) {
         const stillActive = await validateStoredSession(activeSessionId);
         if (!stillActive) {
           sessionActive = false;
+          sessionSeconds = 0;
           activeSessionId = null;
           chrome.storage.local.set({
             sessionActive: false,
             activeSessionId: null,
+            sessionSeconds: 0,
           });
           walletHint.textContent =
             "Previous session expired. Start a new session.";
@@ -1136,6 +1204,8 @@ function restoreState(nodes) {
     }
   );
 }
+
+ipDisplayToggle?.addEventListener("click", toggleIpVisibility);
 
 walletButton.addEventListener("click", handleWalletButtonClick);
 walletIndicator.addEventListener("click", handleWalletButtonClick);
@@ -1188,9 +1258,14 @@ async function handlePopupLaunchFlags() {
 
   if (flags.sessionEndedFromHud) {
     sessionActive = false;
+    sessionSeconds = 0;
     activeSessionId = null;
-    await chrome.storage.local.set({ sessionEndedFromHud: false });
+    await chrome.storage.local.set({
+      sessionEndedFromHud: false,
+      sessionSeconds: 0,
+    });
     updateConnectionUI();
+    updateTimer();
     walletHint.textContent =
       "Session queued for batch settlement. Settle when ready or enable auto-settle.";
     await loadPendingQueue();
@@ -1206,6 +1281,7 @@ window.addEventListener("DOMContentLoaded", () => {
   startLatencySimulation();
   refreshNodeList(relayNodes);
   loadWalletState();
+  loadIpDisplayPreference();
   loadAutoSettleSettings();
   watchWalletState();
   watchSessionState();
