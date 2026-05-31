@@ -41,7 +41,13 @@
     }
   ],
   "web_accessible_resources": [{
-    "resources": ["icons/logo.svg", "icons/icon16.png", "icons/icon48.png", "icons/icon128.png"],
+    "resources": [
+      "icons/logo.svg",
+      "icons/icon16.png",
+      "icons/icon48.png",
+      "icons/icon128.png",
+      "session-hud.css"
+    ],
     "matches": ["<all_urls>"]
   }]
 }

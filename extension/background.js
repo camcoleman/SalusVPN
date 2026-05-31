@@ -1,4 +1,4 @@
-importScripts("config.js");
+importScripts("config.js", "session.js");
 
 const BRIDGE_PAGE_URL = "https://solana.com";
 
@@ -35,19 +35,141 @@ function syncSessionTicker() {
   });
 }
 
-async function openSessionSidePanel() {
+function isHudInjectableUrl(url) {
+  if (!isInjectableUrl(url)) return false;
+  return !url.includes("chrome.google.com/webstore");
+}
+
+async function injectSessionHud(tabId) {
   try {
-    await chrome.sidePanel.setOptions({
-      path: "sidepanel.html",
-      enabled: true,
+    const tab = await chrome.tabs.get(tabId);
+    if (!tab?.id || !isHudInjectableUrl(tab.url)) return;
+
+    const [check] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => Boolean(window.__salusSessionHudMounted),
     });
-    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    if (tab?.windowId) {
-      await chrome.sidePanel.open({ windowId: tab.windowId });
-    }
-  } catch (error) {
-    console.warn("SalusVPN: could not open side panel.", error);
+    if (check?.result) return;
+
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["session-hud.js"],
+    });
+  } catch {
+    // Tab may not allow injection (chrome://, PDF viewer, etc.)
   }
+}
+
+async function injectSessionHudAllTabs() {
+  const tabs = await chrome.tabs.query({});
+  await Promise.all(
+    tabs.map((tab) => (tab.id ? injectSessionHud(tab.id) : Promise.resolve()))
+  );
+}
+
+async function removeSessionHudFromTab(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        if (typeof window.__salusRemoveSessionHud === "function") {
+          window.__salusRemoveSessionHud();
+        }
+      },
+    });
+  } catch {
+    // Tab closed or not injectable
+  }
+}
+
+async function removeSessionHudAllTabs() {
+  const tabs = await chrome.tabs.query({});
+  await Promise.all(
+    tabs.map((tab) =>
+      tab.id ? removeSessionHudFromTab(tab.id) : Promise.resolve()
+    )
+  );
+}
+
+async function openExtensionPopup() {
+  try {
+    await chrome.action.openPopup();
+    return true;
+  } catch {
+    await chrome.storage.local.set({ openPopupOnNextLoad: true });
+    return false;
+  }
+}
+
+async function endActiveSession({ openPopup = false } = {}) {
+  const stored = await chrome.storage.local.get([
+    "activeSessionId",
+    "selectedRelay",
+    "sessionSeconds",
+    "sessionHud",
+    "walletPublicKey",
+  ]);
+
+  const endedSessionId = stored.activeSessionId;
+  const relayId = stored.selectedRelay;
+  const sessionSeconds = stored.sessionSeconds ?? 0;
+  const pricePerSession = stored.sessionHud?.pricePerSession ?? 0;
+  let endedOk = false;
+
+  if (endedSessionId && relayId) {
+    const metrics = getSessionMetrics(sessionSeconds, pricePerSession);
+
+    try {
+      const base = await resolveDashboardBase();
+      const response = await fetch(`${base}/api/session/end`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: endedSessionId,
+          selectedNodeId: relayId,
+          bandwidthUsedMB: metrics.bandwidthMB,
+          accruedCostUSDC: metrics.accruedCostUSDC,
+          walletPublicKey: stored.walletPublicKey ?? undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        if (
+          response.status === 409 &&
+          String(data.error ?? "").includes("already ended")
+        ) {
+          endedOk = true;
+        } else if (response.status !== 404) {
+          console.warn(
+            "SalusVPN: failed to end session from HUD.",
+            data.error || response.status
+          );
+        }
+      } else {
+        endedOk = true;
+      }
+    } catch (error) {
+      console.warn("SalusVPN: end session request failed.", error);
+    }
+  }
+
+  await chrome.storage.local.set({
+    sessionActive: false,
+    activeSessionId: null,
+    walletSessionSigned: false,
+    walletSessionSignature: null,
+    sessionEndedFromHud: openPopup && endedOk,
+  });
+
+  stopSessionTicker();
+  await removeSessionHudAllTabs();
+
+  if (openPopup) {
+    await openExtensionPopup();
+  }
+
+  return { ok: endedOk || !endedSessionId };
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -55,10 +177,21 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
   if (changes.sessionActive.newValue) {
     startSessionTicker();
-    void openSessionSidePanel();
+    void injectSessionHudAllTabs();
   } else {
     stopSessionTicker();
+    void removeSessionHudAllTabs();
   }
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status !== "complete") return;
+
+  chrome.storage.local.get(["sessionActive"], (result) => {
+    if (result.sessionActive) {
+      void injectSessionHud(tabId);
+    }
+  });
 });
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -67,14 +200,30 @@ chrome.runtime.onInstalled.addListener(() => {
   });
   void sanitizeWalletConnectTabId();
   syncSessionTicker();
+  chrome.storage.local.get(["sessionActive"], (result) => {
+    if (result.sessionActive) {
+      void injectSessionHudAllTabs();
+    }
+  });
 });
 
 chrome.runtime.onStartup.addListener(() => {
   void sanitizeWalletConnectTabId();
   syncSessionTicker();
+  chrome.storage.local.get(["sessionActive"], (result) => {
+    if (result.sessionActive) {
+      void injectSessionHudAllTabs();
+    }
+  });
 });
 
 void syncSessionTicker();
+
+chrome.storage.local.get(["sessionActive"], (result) => {
+  if (result.sessionActive) {
+    void injectSessionHudAllTabs();
+  }
+});
 
 try {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
@@ -566,7 +715,14 @@ async function ensureDashboardTab() {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "OPEN_SESSION_HUD") {
-    void openSessionSidePanel().then(() => sendResponse({ ok: true }));
+    void injectSessionHudAllTabs().then(() => sendResponse({ ok: true }));
+    return true;
+  }
+
+  if (message.type === "STOP_FROM_HUD") {
+    void endActiveSession({ openPopup: true }).then((result) =>
+      sendResponse(result)
+    );
     return true;
   }
 

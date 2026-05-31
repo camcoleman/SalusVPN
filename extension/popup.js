@@ -998,6 +998,30 @@ useRecommendationBtn.addEventListener("click", () =>
 );
 endSessionButton.addEventListener("click", endSession);
 
+async function handlePopupLaunchFlags() {
+  const flags = await new Promise((resolve) => {
+    chrome.storage.local.get(
+      ["openPopupOnNextLoad", "sessionEndedFromHud"],
+      resolve
+    );
+  });
+
+  if (flags.openPopupOnNextLoad) {
+    await chrome.storage.local.set({ openPopupOnNextLoad: false });
+  }
+
+  if (flags.sessionEndedFromHud) {
+    sessionActive = false;
+    activeSessionId = null;
+    await chrome.storage.local.set({ sessionEndedFromHud: false });
+    updateConnectionUI();
+    walletHint.textContent =
+      "Session queued for batch settlement. Settle when ready or enable auto-settle.";
+    await loadPendingQueue();
+    await maybeAutoSettle();
+  }
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   if (!Array.isArray(relayNodes)) return;
   getApiBase().then((base) => {
@@ -1011,5 +1035,5 @@ window.addEventListener("DOMContentLoaded", () => {
   watchWalletState();
   watchSessionState();
   restoreState(relayNodes);
-  void loadPendingQueue();
+  void handlePopupLaunchFlags().then(() => loadPendingQueue());
 });
