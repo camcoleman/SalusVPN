@@ -158,6 +158,7 @@ export default function SessionPanel({ selectedNode }: SessionPanelProps) {
   const [pendingSettlement, setPendingSettlement] =
     useState<PendingSettlementSession | null>(null);
   const [settlingPending, setSettlingPending] = useState(false);
+  const [botsBlocked, setBotsBlocked] = useState<number | null>(null);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedRef = useRef(0);
@@ -172,6 +173,32 @@ export default function SessionPanel({ selectedNode }: SessionPanelProps) {
   useEffect(() => {
     return () => clearTick();
   }, [clearTick]);
+
+  // Live "bots blocked" counter — only runs while a session is active. Starts
+  // at a random baseline and ticks up by a small random amount every 1-2s to
+  // simulate the human-lane filter rejecting bot traffic in real time.
+  useEffect(() => {
+    if (status !== "active") {
+      setBotsBlocked(null);
+      return;
+    }
+
+    setBotsBlocked(1000 + Math.floor(Math.random() * 1001));
+
+    let timeout: ReturnType<typeof setTimeout>;
+    const scheduleTick = () => {
+      const delay = 1000 + Math.random() * 1000;
+      timeout = setTimeout(() => {
+        setBotsBlocked((prev) =>
+          (prev ?? 0) + 1 + Math.floor(Math.random() * 5)
+        );
+        scheduleTick();
+      }, delay);
+    };
+    scheduleTick();
+
+    return () => clearTimeout(timeout);
+  }, [status]);
 
   const loadPendingSettlement = useCallback(async () => {
     try {
@@ -470,6 +497,34 @@ export default function SessionPanel({ selectedNode }: SessionPanelProps) {
         connected={status === "active"}
         protectedIp={selectedNode?.demoIp ?? null}
       />
+
+      {status === "active" && botsBlocked !== null && (
+        <div className="mb-4 rounded-lg border border-accent/30 bg-accent/5 p-4">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-2 text-xs font-medium text-accent">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M9 12l2 2 4-4" />
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+              Bots Blocked
+            </span>
+            <span className="h-2 w-2 animate-pulse rounded-full bg-accent shadow-[0_0_8px_var(--accent,#c9773a)]" />
+          </div>
+          <p className="mt-2 font-mono text-lg font-semibold tabular-nums text-accent">
+            {botsBlocked.toLocaleString()}
+          </p>
+        </div>
+      )}
 
       {pendingSettlement && (
         <div className="mb-4 rounded-lg border border-accent-amber/30 bg-accent-amber/5 p-3">

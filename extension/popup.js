@@ -44,6 +44,14 @@ const heroLatency = document.getElementById("hero-latency");
 const ipDisplay = document.getElementById("ip-display");
 const ipDisplayLabel = document.getElementById("ip-display-label");
 const ipDisplayValue = document.getElementById("ip-display-value");
+const botsBlocked = document.getElementById("bots-blocked");
+const botsBlockedValue = document.getElementById("bots-blocked-value");
+const advisorOptions = document.getElementById("advisor-options");
+const advisorResult = document.getElementById("advisor-result");
+const advisorNode = document.getElementById("advisor-node");
+const advisorScore = document.getElementById("advisor-score");
+const advisorReason = document.getElementById("advisor-reason");
+const advisorUse = document.getElementById("advisor-use");
 
 // Static mock "real" IP shown while disconnected. Demo-only — never fetched
 // or used for real routing; just simulates VPN behavior for the demo.
@@ -53,6 +61,13 @@ let selectedRelay = null;
 let sessionActive = false;
 let sessionSeconds = 0;
 let activeSessionId = null;
+
+// Live UI simulation state (demo-only, no real network measurement).
+let liveLatencies = {};
+let latencyTimer = null;
+let botsBlockedCount = 0;
+let botsBlockedTimer = null;
+let advisorRecommendedNode = null;
 
 let walletState = {
   walletConnected: false,
@@ -406,12 +421,152 @@ function buildReason(node) {
   return parts.join(" · ");
 }
 
+// ── Live latency simulation ──────────────────────────────────────────────
+// Each node's latency oscillates by ±3ms around its base value every 3s to
+// mimic real network jitter. Demo-only — no traffic is ever measured.
+function getLiveLatency(node) {
+  if (!node) return null;
+  return liveLatencies[node.id] ?? node.latency;
+}
+
+function updateLatencyDisplays() {
+  document.querySelectorAll(".relay-row").forEach((row) => {
+    const id = row.dataset.nodeId;
+    const latencyEl = row.querySelector(".relay-latency");
+    if (id && latencyEl && liveLatencies[id] != null) {
+      latencyEl.textContent = `${liveLatencies[id]}ms`;
+    }
+  });
+
+  if (selectedRelay) {
+    heroLatency.textContent = `${getLiveLatency(selectedRelay)}ms`;
+  }
+
+  const recommended = relayNodes.find((n) => n.name === recommendedNode.textContent);
+  if (recommended) {
+    recommendedLatency.textContent = `${getLiveLatency(recommended)}ms`;
+  }
+}
+
+function startLatencySimulation() {
+  if (!Array.isArray(relayNodes)) return;
+  liveLatencies = Object.fromEntries(
+    relayNodes.map((node) => [node.id, node.latency])
+  );
+
+  if (latencyTimer) clearInterval(latencyTimer);
+  latencyTimer = setInterval(() => {
+    relayNodes.forEach((node) => {
+      const delta = Math.round((Math.random() * 2 - 1) * 3);
+      liveLatencies[node.id] = Math.max(1, node.latency + delta);
+    });
+    updateLatencyDisplays();
+  }, 3000);
+}
+
+// ── Bot-traffic live counter ─────────────────────────────────────────────
+// While a session is active, simulate the human-lane filter rejecting bot
+// traffic: start at a random baseline, then tick up by 1-5 every 1-2s.
+function updateBotsDisplay() {
+  if (botsBlockedValue) {
+    botsBlockedValue.textContent = botsBlockedCount.toLocaleString();
+  }
+}
+
+function startBotsCounter() {
+  if (botsBlockedTimer) return;
+  botsBlockedCount = 1000 + Math.floor(Math.random() * 1001);
+  updateBotsDisplay();
+  if (botsBlocked) botsBlocked.hidden = false;
+
+  const scheduleTick = () => {
+    const delay = 1000 + Math.random() * 1000;
+    botsBlockedTimer = setTimeout(() => {
+      botsBlockedCount += 1 + Math.floor(Math.random() * 5);
+      updateBotsDisplay();
+      scheduleTick();
+    }, delay);
+  };
+  scheduleTick();
+}
+
+function stopBotsCounter() {
+  if (botsBlockedTimer) {
+    clearTimeout(botsBlockedTimer);
+    botsBlockedTimer = null;
+  }
+  if (botsBlocked) botsBlocked.hidden = true;
+}
+
+// ── AI Trust Advisor (instant mock recommendation) ───────────────────────
+function getMockRecommendation(prefId) {
+  const nodes = relayNodes.slice();
+  let node;
+  let reason;
+
+  switch (prefId) {
+    case "lowest-cost":
+      node = nodes.reduce((a, b) =>
+        b.pricePerSession < a.pricePerSession ? b : a
+      );
+      reason = `Cheapest session at ${formatCurrency(node.pricePerSession)} while holding a ${node.trustScore} trust score.`;
+      break;
+    case "lowest-latency":
+      node = nodes.reduce((a, b) => (b.latency < a.latency ? b : a));
+      reason = `Fastest round-trip near ${getLiveLatency(node)}ms — ideal for gaming and real-time calls.`;
+      break;
+    case "highest-trust":
+      node = nodes.reduce((a, b) => (b.trustScore > a.trustScore ? b : a));
+      reason = `Top trust score (${node.trustScore}) with ${node.uptime}% uptime${node.verified ? " and recent verification" : ""}.`;
+      break;
+    case "streaming":
+      node = nodes
+        .filter((n) => n.verified)
+        .reduce((a, b) => (b.uptime > a.uptime ? b : a), nodes[0]);
+      reason = `High-throughput node with ${node.uptime}% uptime for smooth, buffer-free streaming.`;
+      break;
+    case "general-browsing":
+      node = nodes
+        .filter((n) => n.verified)
+        .reduce((a, b) =>
+          b.trustScore - b.pricePerSession * 100 >
+          a.trustScore - a.pricePerSession * 100
+            ? b
+            : a
+        );
+      reason = `Dependable everyday relay — ${node.trustScore} trust at ${formatCurrency(node.pricePerSession)} per session.`;
+      break;
+    case "best-overall":
+    default:
+      node = getBestNode(nodes);
+      reason = `Balanced pick: ${node.trustScore} trust, ${getLiveLatency(node)}ms latency, ${node.uptime}% uptime.`;
+      break;
+  }
+
+  return { node, reason };
+}
+
+function showAdvisorRecommendation(prefId) {
+  advisorOptions.querySelectorAll(".advisor-opt").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.pref === prefId);
+  });
+
+  const { node, reason } = getMockRecommendation(prefId);
+  advisorRecommendedNode = node;
+
+  advisorNode.textContent = node.name;
+  advisorScore.textContent = `${node.trustScore}`;
+  advisorScore.className = `trust-val ${getTrustClass(node.trustScore)}`;
+  advisorReason.textContent = reason;
+  advisorResult.hidden = false;
+}
+
 function updateRecommendation(node) {
   recommendedBadge.textContent = node.verified ? "Best Overall" : "High Trust";
   recommendedNode.textContent = node.name;
   recommendedScore.textContent = `${node.trustScore}`;
   recommendedScore.className = `trust-val ${getTrustClass(node.trustScore)}`;
-  recommendedLatency.textContent = `${node.latency}ms`;
+  recommendedLatency.textContent = `${getLiveLatency(node)}ms`;
   recommendedReason.textContent = buildReason(node);
 }
 
@@ -430,7 +585,7 @@ function updateSelectedDetails() {
 
   heroTrust.textContent = `${selectedRelay.trustScore}`;
   heroTrust.className = `mstat-val ${getTrustClass(selectedRelay.trustScore)}`;
-  heroLatency.textContent = `${selectedRelay.latency}ms`;
+  heroLatency.textContent = `${getLiveLatency(selectedRelay)}ms`;
   sessionBotRisk.textContent = `${selectedRelay.botRiskScore}%`;
   sessionHumanLane.textContent = selectedRelay.humanLaneAvailable
     ? "Available"
@@ -568,6 +723,12 @@ function updateConnectionUI() {
   stopSessionButton.disabled = !sessionActive;
   endSessionButton.disabled = !sessionActive;
   updateIpDisplay();
+
+  if (sessionActive) {
+    startBotsCounter();
+  } else {
+    stopBotsCounter();
+  }
 }
 
 function updateTimer() {
@@ -946,7 +1107,7 @@ function renderNodeRow(node) {
       <div class="relay-region">${emoji} ${node.region}</div>
     </div>
     <span class="relay-trust ${getTrustClass(node.trustScore)}">${node.trustScore}</span>
-    <span class="relay-latency">${node.latency}ms</span>
+    <span class="relay-latency">${getLiveLatency(node)}ms</span>
     <span class="relay-price">${formatCurrency(node.pricePerSession)}</span>
     <button class="relay-select" title="Select ${node.name}">→</button>
   `;
@@ -1024,6 +1185,13 @@ useRecommendationBtn.addEventListener("click", () =>
 );
 endSessionButton.addEventListener("click", endSession);
 
+advisorOptions.querySelectorAll(".advisor-opt").forEach((btn) => {
+  btn.addEventListener("click", () => showAdvisorRecommendation(btn.dataset.pref));
+});
+advisorUse.addEventListener("click", () => {
+  if (advisorRecommendedNode) setSelectedNode(advisorRecommendedNode);
+});
+
 async function handlePopupLaunchFlags() {
   const flags = await new Promise((resolve) => {
     chrome.storage.local.get(
@@ -1053,6 +1221,7 @@ window.addEventListener("DOMContentLoaded", () => {
   getApiBase().then((base) => {
     apiBase = base;
   });
+  startLatencySimulation();
   const best = getBestNode(relayNodes);
   updateRecommendation(best);
   refreshNodeList(relayNodes);

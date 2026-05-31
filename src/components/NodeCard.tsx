@@ -6,6 +6,8 @@ interface NodeCardProps {
   node: RelayNode;
   selected?: boolean;
   onSelect?: (nodeId: string) => void;
+  /** Live latency override (ms). Falls back to the node's static latency. */
+  liveLatency?: number;
 }
 
 function Badge({
@@ -44,8 +46,10 @@ export default function NodeCard({
   node,
   selected = false,
   onSelect,
+  liveLatency,
 }: NodeCardProps) {
   const lowBotRisk = node.botRiskScore < 30;
+  const latency = liveLatency ?? node.latency;
 
   return (
     <article
@@ -79,7 +83,12 @@ export default function NodeCard({
       </div>
 
       <div className="mb-4 space-y-2.5">
-        <MetricRow label="Latency" value={`${node.latency} ms`} />
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted">Latency</span>
+          <span className="font-medium tabular-nums transition-colors duration-500">
+            {latency} ms
+          </span>
+        </div>
         <MetricRow
           label="Traffic Quality"
           value={`${node.trafficQualityScore}/100`}
