@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import type { RelayNode } from "@/data/relayNodes";
 import WalletConnect from "@/components/WalletConnect";
+import AttestationHashLink from "@/components/AttestationHashLink";
 import {
   calculateBandwidth,
   calculateCost,
@@ -417,6 +418,16 @@ export default function SessionPanel({ selectedNode }: SessionPanelProps) {
         <SessionField
           label="Selected Relay"
           value={selectedNode?.name ?? "None"}
+        />
+        <SessionField
+          label="Attestation Hash"
+          value={
+            selectedNode ? (
+              <AttestationHashLink hash={selectedNode.attestationHash} />
+            ) : (
+              "—"
+            )
+          }
         />
         <SessionField
           label="Status"

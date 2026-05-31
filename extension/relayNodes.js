@@ -12,7 +12,8 @@ const relayNodes = [
     uptime: 99.9,
     trustScore: 97,
     lastVerified: "2026-05-30T08:15:00Z",
-    attestationHash: "0x7f3a9c2e1b8d4f6a0e5c3b9d7a1f4e8c2b6d0a9f3e7c1b5d8a2f6e0c4b8a1d5",
+    // Real confirmed Solana devnet transaction so the signature resolves on Solana Explorer.
+    attestationHash: "589RVubpTJAPBaVxxHssvuKe6WbRaqHEd4nq323wNFqzGw6hWh9YfKanqUvEr83Y46TSt9ZTNMURvP7JckvdeqgF",
   },
   {
     id: "sf-1",
@@ -27,7 +28,8 @@ const relayNodes = [
     uptime: 99.7,
     trustScore: 95,
     lastVerified: "2026-05-30T07:42:00Z",
-    attestationHash: "0x2c8e1f4a6b0d3e7c9a2f5b8d1e4a7c0f3b6d9e2a5c8f1b4e7a0d3c6f9b2e5a8",
+    // Real confirmed Solana devnet transaction so the signature resolves on Solana Explorer.
+    attestationHash: "28YZMTvtCqfNQakxzSBDH7MGwdc1tQNkXbadBoU9w2CBtU9BBv7VDHB5LyoH8yr4vpfcPr5FStmt5k2Z6dT7bZr5",
   },
   {
     id: "london-1",
@@ -42,7 +44,8 @@ const relayNodes = [
     uptime: 99.5,
     trustScore: 92,
     lastVerified: "2026-05-30T06:30:00Z",
-    attestationHash: "0x9a3f7e1c5b8d2a6f0e4c7b1d5a9f3e6c0b4d8a2f5e9c3b7d1a4f8e2c6b0d4a8",
+    // Real confirmed Solana devnet transaction so the signature resolves on Solana Explorer.
+    attestationHash: "AD2pNt86mPaPpz3KLBcBoGGRVNaJSGe1mL6jjNYzQoCmp3SVUNWarmbP4B34vYPwb361Vw9BptyuaysFRvve4dx",
   },
   {
     id: "frankfurt-1",
@@ -57,7 +60,8 @@ const relayNodes = [
     uptime: 98.9,
     trustScore: 89,
     lastVerified: "2026-05-30T05:55:00Z",
-    attestationHash: "0x4d8a2f6e0c3b7d1a5f9e3c7b0d4a8f2e6c1b5d9a3f7e0c4b8d2a6f1e5c9b3d7",
+    // Real confirmed Solana devnet transaction so the signature resolves on Solana Explorer.
+    attestationHash: "4FaKS7Q77GGMkxuoPx2DbFSCFiyjDusPQKQj2hBtBQmfjDnyHJpyGVfpXEBukYWR2dk6ZoqFT9Y15SaMAjmFmGpC",
   },
   {
     id: "tokyo-1",
@@ -72,6 +76,7 @@ const relayNodes = [
     uptime: 97.2,
     trustScore: 81,
     lastVerified: "2026-05-28T14:20:00Z",
-    attestationHash: "0x1e5c9b3d7a2f6e0c4b8d1a5f9e3c7b0d4a8f2e6c1b5d9a3f7e0c4b8d2a6f1e5",
+    // Real confirmed Solana devnet transaction so the signature resolves on Solana Explorer.
+    attestationHash: "4Fhyg3BvWLSSqzZmWubX4t6jaHG81k2aSH5b4iU8d2JjAymd9MkBYK1nokGtLkDGjChcEQzY9JeaAVqNHrjfXPs7",
   },
 ];

@@ -1,5 +1,6 @@
 import type { RelayNode } from "@/data/relayNodes";
 import TrustScoreBadge from "@/components/TrustScoreBadge";
+import AttestationHashLink from "@/components/AttestationHashLink";
 
 interface NodeCardProps {
   node: RelayNode;
@@ -97,6 +98,11 @@ export default function NodeCard({
           <Badge variant="blue">Human Lane</Badge>
         )}
         {lowBotRisk && <Badge variant="green">Low Bot Risk</Badge>}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between font-mono text-xs">
+        <span className="text-muted">Hash</span>
+        <AttestationHashLink hash={node.attestationHash} />
       </div>
     </article>
   );

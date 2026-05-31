@@ -360,6 +360,16 @@ function formatShortHash(hash) {
   return `${hash.slice(0, 8)}…${hash.slice(-4)}`;
 }
 
+function getSolanaExplorerUrl(signature) {
+  return `https://explorer.solana.com/tx/${signature}?cluster=devnet`;
+}
+
+function renderHashLink(hash) {
+  const icon =
+    '<svg class="hash-link-icon" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>';
+  return `<a class="hash-link" href="${getSolanaExplorerUrl(hash)}" target="_blank" rel="noopener noreferrer" title="View attestation on Solana Explorer (Devnet)">${formatShortHash(hash)}${icon}</a>`;
+}
+
 function formatAge(timestamp) {
   const diffMs = Date.now() - new Date(timestamp).getTime();
   const minutes = Math.round(diffMs / 60000);
@@ -418,7 +428,7 @@ function updateSelectedDetails() {
   sessionHumanLane.textContent = selectedRelay.humanLaneAvailable
     ? "Available"
     : "Unavailable";
-  selectedDetails.textContent = `Verified ${formatAge(selectedRelay.lastVerified)} · Hash ${formatShortHash(selectedRelay.attestationHash)} · ${selectedRelay.humanLaneAvailable ? "Human lane" : "Standard lane"} · Bot risk ${selectedRelay.botRiskScore}%`;
+  selectedDetails.innerHTML = `Verified ${formatAge(selectedRelay.lastVerified)} · Hash ${renderHashLink(selectedRelay.attestationHash)} · ${selectedRelay.humanLaneAvailable ? "Human lane" : "Standard lane"} · Bot risk ${selectedRelay.botRiskScore}%`;
 }
 
 function showWalletPicker(show) {
