@@ -1,5 +1,11 @@
 export type SessionStatus = "idle" | "active" | "ended";
 
+/**
+ * Static mock IP shown while disconnected to simulate the user's exposed
+ * "real" address. Demo-only — never fetched or used for any real routing.
+ */
+export const EXPOSED_DEMO_IP = "192.168.1.47";
+
 export type SettlementStatus =
   | "none"
   | "pending"

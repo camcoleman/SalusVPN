@@ -41,6 +41,13 @@ const sessionBotRisk = document.getElementById("session-bot-risk");
 const sessionHumanLane = document.getElementById("session-human-lane");
 const heroTrust = document.getElementById("hero-trust");
 const heroLatency = document.getElementById("hero-latency");
+const ipDisplay = document.getElementById("ip-display");
+const ipDisplayLabel = document.getElementById("ip-display-label");
+const ipDisplayValue = document.getElementById("ip-display-value");
+
+// Static mock "real" IP shown while disconnected. Demo-only — never fetched
+// or used for real routing; just simulates VPN behavior for the demo.
+const EXPOSED_DEMO_IP = "192.168.1.47";
 
 let selectedRelay = null;
 let sessionActive = false;
@@ -533,6 +540,24 @@ function handleWalletButtonClick() {
   showWalletPicker(true);
 }
 
+function updateIpDisplay() {
+  if (!ipDisplay) return;
+
+  const protectedIp = sessionActive ? selectedRelay?.demoIp : null;
+
+  if (protectedIp) {
+    ipDisplay.classList.remove("ip-display--exposed");
+    ipDisplay.classList.add("ip-display--protected");
+    ipDisplayLabel.textContent = "Your IP (Protected)";
+    ipDisplayValue.textContent = protectedIp;
+  } else {
+    ipDisplay.classList.remove("ip-display--protected");
+    ipDisplay.classList.add("ip-display--exposed");
+    ipDisplayLabel.textContent = "Your IP (Exposed)";
+    ipDisplayValue.textContent = EXPOSED_DEMO_IP;
+  }
+}
+
 function updateConnectionUI() {
   statusText.textContent = sessionActive ? "Connected" : "Disconnected";
   connectPill.classList.toggle("pill--on", sessionActive);
@@ -542,6 +567,7 @@ function updateConnectionUI() {
   stopSessionButton.hidden = !sessionActive;
   stopSessionButton.disabled = !sessionActive;
   endSessionButton.disabled = !sessionActive;
+  updateIpDisplay();
 }
 
 function updateTimer() {

@@ -20,6 +20,7 @@ const rawNodes: RawRelayNode[] = [
     botRiskScore: 8,
     uptime: 99.9,
     lastVerified: "2026-05-30T08:15:00Z",
+    demoIp: "104.21.73.142",
     // Real confirmed Solana devnet transaction so the signature resolves on Solana Explorer.
     attestationHash:
       "589RVubpTJAPBaVxxHssvuKe6WbRaqHEd4nq323wNFqzGw6hWh9YfKanqUvEr83Y46TSt9ZTNMURvP7JckvdeqgF",
@@ -36,6 +37,7 @@ const rawNodes: RawRelayNode[] = [
     botRiskScore: 12,
     uptime: 99.7,
     lastVerified: "2026-05-30T07:42:00Z",
+    demoIp: "172.67.142.89",
     // Real confirmed Solana devnet transaction so the signature resolves on Solana Explorer.
     attestationHash:
       "28YZMTvtCqfNQakxzSBDH7MGwdc1tQNkXbadBoU9w2CBtU9BBv7VDHB5LyoH8yr4vpfcPr5FStmt5k2Z6dT7bZr5",
@@ -52,6 +54,7 @@ const rawNodes: RawRelayNode[] = [
     botRiskScore: 18,
     uptime: 99.5,
     lastVerified: "2026-05-30T06:30:00Z",
+    demoIp: "104.26.11.74",
     // Real confirmed Solana devnet transaction so the signature resolves on Solana Explorer.
     attestationHash:
       "AD2pNt86mPaPpz3KLBcBoGGRVNaJSGe1mL6jjNYzQoCmp3SVUNWarmbP4B34vYPwb361Vw9BptyuaysFRvve4dx",
@@ -68,6 +71,7 @@ const rawNodes: RawRelayNode[] = [
     botRiskScore: 28,
     uptime: 98.9,
     lastVerified: "2026-05-30T05:55:00Z",
+    demoIp: "188.114.97.3",
     // Real confirmed Solana devnet transaction so the signature resolves on Solana Explorer.
     attestationHash:
       "4FaKS7Q77GGMkxuoPx2DbFSCFiyjDusPQKQj2hBtBQmfjDnyHJpyGVfpXEBukYWR2dk6ZoqFT9Y15SaMAjmFmGpC",
@@ -84,6 +88,7 @@ const rawNodes: RawRelayNode[] = [
     botRiskScore: 35,
     uptime: 97.2,
     lastVerified: "2026-05-28T14:20:00Z",
+    demoIp: "103.21.244.17",
     // Real confirmed Solana devnet transaction so the signature resolves on Solana Explorer.
     attestationHash:
       "4Fhyg3BvWLSSqzZmWubX4t6jaHG81k2aSH5b4iU8d2JjAymd9MkBYK1nokGtLkDGjChcEQzY9JeaAVqNHrjfXPs7",
