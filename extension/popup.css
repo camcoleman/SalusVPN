@@ -475,12 +475,61 @@ body {
 }
 
 .ip-display-value {
-  display: block;
-  margin-top: 5px;
   font-size: 16px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+  flex: 1;
+  min-width: 0;
+}
+
+.ip-display-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.ip-display-toggle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.ip-display-toggle:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.ip-display--exposed .ip-display-toggle {
+  color: #d46060;
+}
+
+.ip-display--protected .ip-display-toggle {
+  color: var(--green);
+}
+
+.ip-toggle-icon--visible {
+  display: none;
+}
+
+.ip-display-toggle.ip-display-toggle--masked .ip-toggle-icon--hidden {
+  display: none;
+}
+
+.ip-display-toggle.ip-display-toggle--masked .ip-toggle-icon--visible {
+  display: block;
 }
 
 .hash-link {

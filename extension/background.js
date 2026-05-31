@@ -157,6 +157,7 @@ async function endActiveSession({ openPopup = false } = {}) {
   await chrome.storage.local.set({
     sessionActive: false,
     activeSessionId: null,
+    sessionSeconds: 0,
     walletSessionSigned: false,
     walletSessionSignature: null,
     sessionEndedFromHud: openPopup && endedOk,
