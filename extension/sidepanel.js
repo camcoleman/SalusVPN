@@ -27,6 +27,8 @@ function renderHud(result) {
   const active = Boolean(result.sessionActive);
   const hudData = result.sessionHud ?? {};
   const seconds = result.sessionSeconds ?? 0;
+  const pendingCount = result.pendingSettlementCount ?? 0;
+  const pendingTotal = result.pendingSettlementTotalUSDC ?? 0;
 
   hud.classList.toggle("hud--active", active);
   hud.classList.toggle("hud--idle", !active);
@@ -44,6 +46,14 @@ function renderHud(result) {
     hudLatency.textContent =
       hudData.latency != null ? `${hudData.latency}ms` : "—";
     hudHint.textContent = "Session live — browse freely, stats stay pinned here.";
+  } else if (pendingCount > 0) {
+    hudRelay.textContent = "Pending payments";
+    hudTime.textContent = `${pendingCount}`;
+    hudCost.textContent = formatCurrency(pendingTotal);
+    hudTrust.textContent = "—";
+    hudTrust.className = "hud-val";
+    hudLatency.textContent = "—";
+    hudHint.textContent = `${formatCurrency(pendingTotal)} owed · open popup to settle batch`;
   } else {
     hudRelay.textContent = "No active session";
     hudTime.textContent = "00:00";
@@ -57,7 +67,14 @@ function renderHud(result) {
 
 function loadHudState() {
   chrome.storage.local.get(
-    ["sessionActive", "sessionSeconds", "sessionHud", "hudMinimized"],
+    [
+      "sessionActive",
+      "sessionSeconds",
+      "sessionHud",
+      "hudMinimized",
+      "pendingSettlementCount",
+      "pendingSettlementTotalUSDC",
+    ],
     (result) => {
       if (result.hudMinimized) {
         hud.classList.add("hud--minimized");
@@ -81,7 +98,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (
     changes.sessionActive ||
     changes.sessionSeconds ||
-    changes.sessionHud
+    changes.sessionHud ||
+    changes.pendingSettlementCount ||
+    changes.pendingSettlementTotalUSDC
   ) {
     loadHudState();
   }

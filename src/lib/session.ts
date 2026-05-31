@@ -17,6 +17,8 @@ export type Session = {
   accruedCostUSDC: number;
   settlementStatus: SettlementStatus;
   transactionSignature?: string;
+  walletPublicKey?: string;
+  batchId?: string;
 };
 
 export function createSession(selectedNodeId: string): Session {

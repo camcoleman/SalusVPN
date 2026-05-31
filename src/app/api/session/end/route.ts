@@ -6,6 +6,7 @@ interface EndSessionRequest {
   selectedNodeId?: string;
   bandwidthUsedMB?: number;
   accruedCostUSDC?: number;
+  walletPublicKey?: string;
 }
 
 export async function POST(request: Request) {
@@ -46,7 +47,8 @@ export async function POST(request: Request) {
     const ended = endSession(
       body.sessionId,
       body.bandwidthUsedMB,
-      body.accruedCostUSDC
+      body.accruedCostUSDC,
+      body.walletPublicKey
     );
 
     if (!ended) {

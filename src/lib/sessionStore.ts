@@ -34,7 +34,8 @@ export function createAndStoreSession(nodeId: string): Session {
 export function endSession(
   sessionId: string,
   bandwidthUsedMB: number,
-  accruedCostUSDC: number
+  accruedCostUSDC: number,
+  walletPublicKey?: string
 ): Session | undefined {
   const session = sessions.get(sessionId);
   if (!session) return undefined;
@@ -46,10 +47,50 @@ export function endSession(
     bandwidthUsedMB,
     accruedCostUSDC,
     settlementStatus: "pending",
+    walletPublicKey: walletPublicKey ?? session.walletPublicKey,
   };
 
   sessions.set(sessionId, updated);
   return updated;
+}
+
+export function getPendingSettlementSessions(
+  walletPublicKey?: string
+): Session[] {
+  return Array.from(sessions.values())
+    .filter(
+      (session) =>
+        session.status === "ended" &&
+        session.settlementStatus === "pending" &&
+        (!walletPublicKey ||
+          !session.walletPublicKey ||
+          session.walletPublicKey === walletPublicKey)
+    )
+    .sort((a, b) => (b.endedAt ?? "").localeCompare(a.endedAt ?? ""));
+}
+
+export function settleBatch(
+  sessionIds: string[],
+  transactionSignature: string
+): Session[] {
+  const batchId = crypto.randomUUID();
+  const settled: Session[] = [];
+
+  for (const sessionId of sessionIds) {
+    const session = sessions.get(sessionId);
+    if (!session) continue;
+
+    const updated: Session = {
+      ...session,
+      settlementStatus: "settled",
+      transactionSignature,
+      batchId,
+    };
+    sessions.set(sessionId, updated);
+    settled.push(updated);
+  }
+
+  return settled;
 }
 
 export function updateSettlement(

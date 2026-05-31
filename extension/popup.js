@@ -11,6 +11,14 @@ const settlementTxRow = document.getElementById("settlement-tx-row");
 const settlementTxLink = document.getElementById("settlement-tx-link");
 const settleRetryButton = document.getElementById("settle-retry-button");
 const settleDashboardButton = document.getElementById("settle-dashboard-button");
+const pendingCard = document.getElementById("pending-card");
+const pendingCountBadge = document.getElementById("pending-count-badge");
+const pendingSummary = document.getElementById("pending-summary");
+const pendingList = document.getElementById("pending-list");
+const settleAllButton = document.getElementById("settle-all-button");
+const pendingError = document.getElementById("pending-error");
+const autoSettleEnabled = document.getElementById("auto-settle-enabled");
+const autoSettleThreshold = document.getElementById("auto-settle-threshold");
 const recommendedBadge = document.getElementById("recommended-badge");
 const recommendedNode = document.getElementById("recommended-node");
 const recommendedScore = document.getElementById("recommended-score");
@@ -45,6 +53,217 @@ let walletState = {
 };
 
 let apiBase = API_BASE;
+
+const SETTLEMENT_PER_SESSION_USDC = 0.001;
+const DEFAULT_AUTO_SETTLE_THRESHOLD = 5;
+
+let pendingQueue = {
+  sessions: [],
+  count: 0,
+  totalAmountUSDC: 0,
+};
+
+function formatPendingAge(iso) {
+  if (!iso) return "";
+  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  return `${Math.round(minutes / 60)}h ago`;
+}
+
+async function loadPendingQueue() {
+  if (!isWalletReady()) {
+    pendingQueue = { sessions: [], count: 0, totalAmountUSDC: 0 };
+    renderPendingQueue();
+    return;
+  }
+
+  try {
+    const base = await getApiBase();
+    const url = `${base}/api/session/pending-settlement?walletPublicKey=${encodeURIComponent(walletState.walletPublicKey)}`;
+    const response = await fetch(url);
+    const data = await parseJsonResponse(response);
+
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to load pending payments.");
+    }
+
+    pendingQueue = {
+      sessions: data.sessions ?? [],
+      count: data.count ?? 0,
+      totalAmountUSDC: data.totalAmountUSDC ?? 0,
+    };
+
+    await chrome.storage.local.set({
+      pendingSessionIds: pendingQueue.sessions.map((s) => s.sessionId),
+      pendingSettlementCount: pendingQueue.count,
+      pendingSettlementTotalUSDC: pendingQueue.totalAmountUSDC,
+    });
+
+    renderPendingQueue();
+  } catch (error) {
+    pendingError.style.display = "block";
+    pendingError.textContent =
+      error instanceof Error ? error.message : "Failed to load pending queue.";
+    renderPendingQueue();
+  }
+}
+
+function renderPendingQueue() {
+  const { sessions, count, totalAmountUSDC } = pendingQueue;
+
+  pendingCountBadge.textContent = String(count);
+
+  if (count === 0) {
+    pendingSummary.textContent = "No unpaid sessions.";
+    pendingList.innerHTML = "";
+    settleAllButton.style.display = "none";
+    pendingError.style.display = "none";
+    return;
+  }
+
+  pendingSummary.textContent = `${count} session${count === 1 ? "" : "s"} · ${formatCurrency(totalAmountUSDC)} total`;
+  pendingList.innerHTML = "";
+
+  sessions.forEach((session) => {
+    const row = document.createElement("div");
+    row.className = "pending-item";
+    row.innerHTML = `
+      <div>
+        <div class="pending-item-name">${session.nodeName}</div>
+        <div class="pending-item-meta">${formatPendingAge(session.endedAt)}</div>
+      </div>
+      <span class="pending-item-meta">${formatCurrency(session.settlementAmountUSDC ?? SETTLEMENT_PER_SESSION_USDC)}</span>
+    `;
+    pendingList.appendChild(row);
+  });
+
+  settleAllButton.style.display = "block";
+  settleAllButton.textContent = `Settle ${count} session${count === 1 ? "" : "s"} (${formatCurrency(totalAmountUSDC)})`;
+  settleAllButton.disabled = !isWalletReady();
+}
+
+function loadAutoSettleSettings() {
+  chrome.storage.local.get(
+    ["autoSettleEnabled", "autoSettleSessionThreshold"],
+    (result) => {
+      autoSettleEnabled.checked = Boolean(result.autoSettleEnabled);
+      autoSettleThreshold.value = String(
+        result.autoSettleSessionThreshold ?? DEFAULT_AUTO_SETTLE_THRESHOLD
+      );
+    }
+  );
+}
+
+function saveAutoSettleSettings() {
+  const threshold = Math.max(
+    1,
+    Math.min(20, Number(autoSettleThreshold.value) || DEFAULT_AUTO_SETTLE_THRESHOLD)
+  );
+  autoSettleThreshold.value = String(threshold);
+  chrome.storage.local.set({
+    autoSettleEnabled: autoSettleEnabled.checked,
+    autoSettleSessionThreshold: threshold,
+  });
+}
+
+async function maybeAutoSettle() {
+  const settings = await new Promise((resolve) => {
+    chrome.storage.local.get(
+      ["autoSettleEnabled", "autoSettleSessionThreshold"],
+      resolve
+    );
+  });
+
+  if (!settings.autoSettleEnabled) return;
+
+  const threshold =
+    settings.autoSettleSessionThreshold ?? DEFAULT_AUTO_SETTLE_THRESHOLD;
+
+  if (pendingQueue.count >= threshold) {
+    const sessionIds = pendingQueue.sessions.map((s) => s.sessionId);
+    await runBatchSettlement(sessionIds);
+  }
+}
+
+async function runBatchSettlement(sessionIds) {
+  if (!sessionIds?.length) {
+    await loadPendingQueue();
+    return false;
+  }
+
+  if (!isWalletReady()) {
+    pendingError.style.display = "block";
+    pendingError.textContent = "Connect wallet to settle pending payments.";
+    return false;
+  }
+
+  settleAllButton.disabled = true;
+  settleRetryButton.disabled = true;
+  pendingError.style.display = "none";
+  walletHint.textContent = `Approve batch USDC payment (${sessionIds.length} sessions) in Phantom…`;
+
+  try {
+    const base = await getApiBase();
+    const buildResponse = await fetch(`${base}/api/session/build-batch-settle-tx`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionIds,
+        walletPublicKey: walletState.walletPublicKey,
+      }),
+    });
+
+    const buildData = await parseJsonResponse(buildResponse);
+    if (!buildResponse.ok) {
+      throw new Error(buildData.error || "Could not build batch settlement transaction.");
+    }
+
+    const signResult = await requestSettlementSign(buildData.transaction);
+
+    const settleResponse = await fetch(`${base}/api/session/settle-batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionIds: buildData.sessionIds ?? sessionIds,
+        transactionSignature: signResult.signature,
+        walletPublicKey: walletState.walletPublicKey,
+      }),
+    });
+
+    if (!settleResponse.ok) {
+      const settleData = await parseJsonResponse(settleResponse);
+      throw new Error(settleData.error || "Failed to record batch settlement.");
+    }
+
+    await chrome.storage.local.set({
+      pendingSettlementSessionId: null,
+      pendingSessionIds: [],
+      settlementError: null,
+      lastSettlementSignature: signResult.signature,
+      lastSettlementStatus: "settled",
+      pendingSettlementCount: 0,
+      pendingSettlementTotalUSDC: 0,
+    });
+
+    showSettlementSuccess(signResult.signature);
+    walletHint.textContent = `Batch payment complete (${buildData.sessionCount ?? sessionIds.length} sessions).`;
+    await loadPendingQueue();
+    return true;
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Batch settlement failed.";
+    await chrome.storage.local.set({ settlementError: message });
+    pendingError.style.display = "block";
+    pendingError.textContent = message;
+    walletHint.textContent = message;
+    showSettlementPending(message);
+    return false;
+  } finally {
+    settleAllButton.disabled = !isWalletReady();
+    settleRetryButton.disabled = false;
+  }
+}
 
 function getApiBase() {
   return new Promise((resolve) => {
@@ -350,6 +569,7 @@ function loadWalletState() {
       };
       updateWalletUI();
       updateConnectionUI();
+      void loadPendingQueue();
 
       if (result.walletConnecting && !result.walletConnected) {
         walletHint.textContent = `Approve the ${result.walletConnecting} popup, then reopen SalusVPN.`;
@@ -357,16 +577,14 @@ function loadWalletState() {
         walletHint.textContent = result.walletConnectError;
       }
 
-      if (result.pendingSettlementSessionId) {
-        showSettlementPending(
-          result.settlementError ??
-            "Session ended. Approve USDC payment in your wallet or retry."
-        );
-      } else if (
+      if (
         result.lastSettlementSignature &&
         result.lastSettlementStatus === "settled"
       ) {
         showSettlementSuccess(result.lastSettlementSignature);
+      } else if (result.settlementError) {
+        pendingError.style.display = "block";
+        pendingError.textContent = result.settlementError;
       } else {
         clearSettlementUI();
       }
@@ -386,6 +604,10 @@ function watchWalletState() {
       changes.walletConnectError
     ) {
       loadWalletState();
+    }
+
+    if (changes.pendingSettlementCount || changes.pendingSessionIds) {
+      void loadPendingQueue();
     }
   });
 }
@@ -572,68 +794,7 @@ function requestSettlementSign(serializedTx) {
 }
 
 async function runSettlement(sessionId) {
-  if (!isWalletReady()) {
-    showSettlementPending("Connect wallet to settle.");
-    return false;
-  }
-
-  walletHint.textContent = "Approve the USDC payment in your wallet (Devnet)…";
-
-  try {
-    const base = await getApiBase();
-    const buildResponse = await fetch(`${base}/api/session/build-settle-tx`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId,
-        walletPublicKey: walletState.walletPublicKey,
-      }),
-    });
-
-    const buildData = await parseJsonResponse(buildResponse);
-    if (!buildResponse.ok) {
-      throw new Error(buildData.error || "Could not build settlement transaction.");
-    }
-
-    const signResult = await requestSettlementSign(buildData.transaction);
-
-    const settleResponse = await fetch(`${base}/api/session/settle`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId,
-        settlementStatus: "settled",
-        transactionSignature: signResult.signature,
-      }),
-    });
-
-    if (!settleResponse.ok) {
-      const settleData = await parseJsonResponse(settleResponse);
-      throw new Error(settleData.error || "Failed to record settlement.");
-    }
-
-    await chrome.storage.local.set({
-      pendingSettlementSessionId: null,
-      lastSettlementSignature: signResult.signature,
-      lastSettlementStatus: "settled",
-      lastSettlementSessionId: sessionId,
-      settlementError: null,
-    });
-
-    showSettlementSuccess(signResult.signature);
-    walletHint.textContent = "Payment complete.";
-    return true;
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Settlement failed.";
-    await chrome.storage.local.set({
-      pendingSettlementSessionId: sessionId,
-      settlementError: message,
-    });
-    showSettlementPending(message);
-    walletHint.textContent = message;
-    return false;
-  }
+  return runBatchSettlement([sessionId]);
 }
 
 async function endSession() {
@@ -655,6 +816,7 @@ async function endSession() {
           selectedNodeId: selectedRelay.id,
           bandwidthUsedMB: metrics.bandwidthMB,
           accruedCostUSDC: metrics.accruedCostUSDC,
+          walletPublicKey: walletState.walletPublicKey ?? undefined,
         }),
       });
 
@@ -679,7 +841,8 @@ async function endSession() {
             walletSessionSignature: null,
           });
           updateConnectionUI();
-          await runSettlement(endedSessionId);
+          await loadPendingQueue();
+          await maybeAutoSettle();
           return;
         }
         throw new Error(data.error || "Failed to end session");
@@ -695,7 +858,10 @@ async function endSession() {
       });
       updateConnectionUI();
 
-      await runSettlement(endedSessionId);
+      walletHint.textContent =
+        "Session queued for batch settlement. Settle when ready or enable auto-settle.";
+      await loadPendingQueue();
+      await maybeAutoSettle();
     } catch (error) {
       walletHint.textContent =
         error instanceof Error ? error.message : "Failed to end session.";
@@ -802,12 +968,17 @@ walletPicker.querySelectorAll(".wallet-option").forEach((button) => {
 });
 settleDashboardButton.addEventListener("click", openDashboardConnect);
 settleRetryButton.addEventListener("click", () => {
-  chrome.storage.local.get(["pendingSettlementSessionId"], (result) => {
-    if (result.pendingSettlementSessionId) {
-      runSettlement(result.pendingSettlementSessionId);
-    }
-  });
+  const sessionIds = pendingQueue.sessions.map((s) => s.sessionId);
+  if (sessionIds.length) {
+    void runBatchSettlement(sessionIds);
+  }
 });
+settleAllButton.addEventListener("click", () => {
+  const sessionIds = pendingQueue.sessions.map((s) => s.sessionId);
+  void runBatchSettlement(sessionIds);
+});
+autoSettleEnabled.addEventListener("change", saveAutoSettleSettings);
+autoSettleThreshold.addEventListener("change", saveAutoSettleSettings);
 sessionButton.addEventListener("click", startSession);
 useRecommendationBtn.addEventListener("click", () =>
   setSelectedNode(getBestNode(relayNodes))
@@ -823,7 +994,9 @@ window.addEventListener("DOMContentLoaded", () => {
   updateRecommendation(best);
   refreshNodeList(relayNodes);
   loadWalletState();
+  loadAutoSettleSettings();
   watchWalletState();
   watchSessionState();
   restoreState(relayNodes);
+  void loadPendingQueue();
 });

@@ -97,13 +97,56 @@ export async function checkSettlementPreflight(
   return { ok: true, solBalance, usdcBalance };
 }
 
-export async function buildSettlementTransaction(
+export function calculateBatchAmount(sessionCount: number): number {
+  if (sessionCount < 1) {
+    throw new Error("At least one session is required for batch settlement.");
+  }
+  return sessionCount * SETTLEMENT_USDC_AMOUNT;
+}
+
+export async function checkBatchSettlementPreflight(
   connection: Connection,
-  publicKey: PublicKey
+  publicKey: PublicKey,
+  amountMicroUsdc: number
+): Promise<SettlementPreflight> {
+  const solBalance = await getSolBalance(connection, publicKey);
+  const usdcBalance = await getUsdcBalance(connection, publicKey);
+  const requiredUsdc = amountMicroUsdc / 1_000_000;
+
+  if (solBalance < MIN_SOL_FOR_SETTLEMENT) {
+    return {
+      ok: false,
+      solBalance,
+      usdcBalance,
+      error:
+        "Need devnet SOL for transaction fees. Get SOL at faucet.solana.com (select Devnet). Testnet funds will not work.",
+    };
+  }
+
+  if (usdcBalance < requiredUsdc) {
+    return {
+      ok: false,
+      solBalance,
+      usdcBalance,
+      error: `Need ${requiredUsdc.toFixed(3)} devnet USDC for this batch. Use spl-token-faucet.com on Devnet.`,
+    };
+  }
+
+  return { ok: true, solBalance, usdcBalance };
+}
+
+export async function buildBatchSettlementTransaction(
+  connection: Connection,
+  publicKey: PublicKey,
+  amountMicroUsdc: number
 ): Promise<BuiltSettlementTransaction> {
-  const preflight = await checkSettlementPreflight(connection, publicKey);
+  const preflight = await checkBatchSettlementPreflight(
+    connection,
+    publicKey,
+    amountMicroUsdc
+  );
   if (!preflight.ok) {
-    throw new Error(preflight.error ?? "Settlement preflight failed.");
+    throw new Error(preflight.error ?? "Batch settlement preflight failed.");
   }
 
   const sourceAta = await getAssociatedTokenAddress(
@@ -143,11 +186,22 @@ export async function buildSettlementTransaction(
       sourceAta,
       destinationAta,
       publicKey,
-      SETTLEMENT_USDC_AMOUNT
+      amountMicroUsdc
     )
   );
 
   return { transaction, blockhash, lastValidBlockHeight };
+}
+
+export async function buildSettlementTransaction(
+  connection: Connection,
+  publicKey: PublicKey
+): Promise<BuiltSettlementTransaction> {
+  return buildBatchSettlementTransaction(
+    connection,
+    publicKey,
+    SETTLEMENT_USDC_AMOUNT
+  );
 }
 
 function isUserRejection(error: unknown): boolean {

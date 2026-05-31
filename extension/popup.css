@@ -422,3 +422,77 @@ body {
 }
 
 .wallet-actions { display: flex; gap: 8px; }
+
+/* ── Pending payments ────────────────────────────── */
+.pending-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+  margin: 8px 0;
+}
+
+.pending-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 11px;
+}
+
+.pending-item-name {
+  font-weight: 600;
+}
+
+.pending-item-meta {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.pending-settle-btn {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.pending-error {
+  color: #e06c6c;
+  margin-top: 6px;
+}
+
+.auto-settle-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.auto-settle-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.auto-settle-threshold {
+  width: 44px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.auto-settle-suffix {
+  color: var(--text-dim);
+}
+
