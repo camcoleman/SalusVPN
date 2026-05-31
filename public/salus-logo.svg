@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="90" viewBox="0 0 100 90">
+  <!-- Outer hexagon -->
+  <polygon
+    points="50,3 78,14 78,52 50,67 22,52 22,14"
+    fill="#1e1508"
+    stroke="#c9773a"
+    stroke-width="1.3"
+  />
+
+  <!-- Inner hexagon outline -->
+  <polygon
+    points="50,9 72,18.5 72,47.5 50,57 28,47.5 28,18.5"
+    fill="none"
+    stroke="#c9773a"
+    stroke-opacity="0.3"
+    stroke-width="0.6"
+  />
+
+  <!-- Crosshair lines -->
+  <line x1="22" y1="35" x2="78" y2="35" stroke="#c9773a" stroke-opacity="0.2" stroke-width="0.5"/>
+  <line x1="50" y1="3"  x2="50" y2="67" stroke="#c9773a" stroke-opacity="0.2" stroke-width="0.5"/>
+
+  <!-- Inner angular panel -->
+  <path
+    d="M38,22 L50,15 L62,22 L62,48 L50,55 L38,48 Z"
+    fill="none"
+    stroke="#c9773a"
+    stroke-width="1.3"
+  />
+
+  <!-- Decorative arcs -->
+  <path d="M32,22 Q50,14 68,22" fill="none" stroke="#c9773a" stroke-opacity="0.27" stroke-width="0.6"/>
+  <path d="M32,48 Q50,56 68,48" fill="none" stroke="#c9773a" stroke-opacity="0.27" stroke-width="0.6"/>
+
+  <!-- Outer ring -->
+  <circle cx="50" cy="35" r="8" fill="none" stroke="#c9773a" stroke-width="0.7"/>
+
+  <!-- 4 tick marks -->
+  <line x1="50" y1="27" x2="50" y2="24" stroke="#c9773a" stroke-width="1.1" stroke-linecap="round"/>
+  <line x1="50" y1="43" x2="50" y2="46" stroke="#c9773a" stroke-width="1.1" stroke-linecap="round"/>
+  <line x1="42" y1="35" x2="39" y2="35" stroke="#c9773a" stroke-width="1.1" stroke-linecap="round"/>
+  <line x1="58" y1="35" x2="61" y2="35" stroke="#c9773a" stroke-width="1.1" stroke-linecap="round"/>
+
+  <!-- Center filled circle -->
+  <circle cx="50" cy="35" r="4.5" fill="#c9773a"/>
+
+  <!-- SALUS logotype -->
+  <text
+    x="50"
+    y="84"
+    text-anchor="middle"
+    font-family="'Cinzel', serif"
+    font-weight="900"
+    font-size="18"
+    fill="#c9773a"
+    letter-spacing="4"
+  >SALUS</text>
+</svg>
