@@ -49,6 +49,11 @@ export interface RelayNode {
   lastVerified: string;
   /** On-chain / attestation hash proving the node's last verification. */
   attestationHash: string;
+  /**
+   * Demo-only "protected" IP shown when connected to this node. Purely visual
+   * simulation for the demo — there is no real IP fetching or traffic routing.
+   */
+  demoIp: string;
 }
 
 /**
