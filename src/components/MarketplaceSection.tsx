@@ -2,12 +2,14 @@
 
 import { useSessionSelection } from "@/context/SessionSelectionContext";
 import { relayNodes } from "@/data/relayNodes";
+import { useLiveLatencies } from "@/hooks/useLiveLatencies";
 import NodeCard from "@/components/NodeCard";
 import SessionPanel from "@/components/SessionPanel";
 import SessionHistory from "@/components/SessionHistory";
 
 export default function MarketplaceSection() {
   const { selectedNodeId, selectedNode, selectNode } = useSessionSelection();
+  const liveLatencies = useLiveLatencies(relayNodes);
 
   return (
     <div className="grid gap-8 lg:grid-cols-3">
@@ -19,6 +21,7 @@ export default function MarketplaceSection() {
               node={node}
               selected={selectedNodeId === node.id}
               onSelect={selectNode}
+              liveLatency={liveLatencies[node.id]}
             />
           ))}
         </div>

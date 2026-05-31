@@ -86,7 +86,41 @@
           </div>
           <span id="ip-display-value" class="ip-display-value">192.168.1.47</span>
         </div>
+        <div id="bots-blocked" class="bots-blocked" hidden>
+          <div class="bots-blocked-head">
+            <svg class="bots-blocked-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 12l2 2 4-4"/>
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <span class="bots-blocked-label">Bots Blocked</span>
+            <span class="bots-blocked-dot"></span>
+          </div>
+          <span id="bots-blocked-value" class="bots-blocked-value">0</span>
+        </div>
         <p id="selected-details" class="detail-line">Select a relay to view verification details.</p>
+      </section>
+
+      <section class="card advisor-card">
+        <div class="card-head">
+          <span class="section-label">AI Trust Advisor</span>
+          <span class="tag tag--ai">Instant</span>
+        </div>
+        <div id="advisor-options" class="advisor-options">
+          <button type="button" class="advisor-opt" data-pref="best-overall">Best Overall</button>
+          <button type="button" class="advisor-opt" data-pref="lowest-cost">Lowest Cost</button>
+          <button type="button" class="advisor-opt" data-pref="lowest-latency">Lowest Latency</button>
+          <button type="button" class="advisor-opt" data-pref="highest-trust">Highest Trust</button>
+          <button type="button" class="advisor-opt" data-pref="streaming">Streaming</button>
+          <button type="button" class="advisor-opt" data-pref="general-browsing">General Browsing</button>
+        </div>
+        <div id="advisor-result" class="advisor-result" hidden>
+          <div class="advisor-result-row">
+            <span id="advisor-node" class="advisor-node">—</span>
+            <span id="advisor-score" class="trust-val">--</span>
+            <button id="advisor-use" class="btn btn--ghost btn--sm">Use This Node</button>
+          </div>
+          <p id="advisor-reason" class="detail-line"></p>
+        </div>
       </section>
 
       <section class="card gemini-card">
