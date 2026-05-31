@@ -75,7 +75,6 @@ let walletState = {
 
 let apiBase = API_BASE;
 
-const SETTLEMENT_PER_SESSION_USDC = 0.001;
 const DEFAULT_AUTO_SETTLE_THRESHOLD = 5;
 
 let pendingQueue = {
@@ -154,7 +153,7 @@ function renderPendingQueue() {
         <div class="pending-item-name">${session.nodeName}</div>
         <div class="pending-item-meta">${formatPendingAge(session.endedAt)}</div>
       </div>
-      <span class="pending-item-meta">${formatCurrency(session.settlementAmountUSDC ?? SETTLEMENT_PER_SESSION_USDC)}</span>
+      <span class="pending-item-meta">${formatCurrency(session.accruedCostUSDC ?? 0)}</span>
     `;
     pendingList.appendChild(row);
   });
@@ -1028,8 +1027,12 @@ async function endSession() {
   const endedSessionId = activeSessionId;
 
   if (endedSessionId && selectedRelay) {
+    const stored = await new Promise((resolve) => {
+      chrome.storage.local.get(["sessionSeconds"], resolve);
+    });
+    const secondsForEnd = stored.sessionSeconds ?? sessionSeconds;
     const metrics = getSessionMetrics(
-      sessionSeconds,
+      secondsForEnd,
       selectedRelay.pricePerSession
     );
 

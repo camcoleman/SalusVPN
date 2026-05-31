@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { relayNodes } from "@/data/relayNodes";
 import { getPendingSettlementSessions } from "@/lib/sessionStore";
-import { SETTLEMENT_USDC_AMOUNT } from "@/lib/settlement";
 
 const nodeNames = new Map(relayNodes.map((node) => [node.id, node.name]));
 
@@ -16,12 +15,13 @@ export async function GET(request: Request) {
       nodeName: nodeNames.get(session.selectedNodeId) ?? session.selectedNodeId,
       endedAt: session.endedAt,
       accruedCostUSDC: session.accruedCostUSDC,
-      settlementAmountUSDC: SETTLEMENT_USDC_AMOUNT / 1_000_000,
     })
   );
 
-  const totalAmountUSDC =
-    (sessions.length * SETTLEMENT_USDC_AMOUNT) / 1_000_000;
+  const totalAmountUSDC = sessions.reduce(
+    (sum, session) => sum + (session.accruedCostUSDC ?? 0),
+    0
+  );
 
   return NextResponse.json({
     sessions,

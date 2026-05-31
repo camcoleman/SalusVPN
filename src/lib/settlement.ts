@@ -104,6 +104,23 @@ export function calculateBatchAmount(sessionCount: number): number {
   return sessionCount * SETTLEMENT_USDC_AMOUNT;
 }
 
+export function calculateBatchAccruedAmount(
+  accruedCostsUSDC: number[]
+): number {
+  if (accruedCostsUSDC.length < 1) {
+    throw new Error("At least one session is required for batch settlement.");
+  }
+
+  const totalUSDC = accruedCostsUSDC.reduce((sum, cost) => sum + cost, 0);
+  const amountMicroUsdc = Math.round(totalUSDC * 1_000_000);
+
+  if (amountMicroUsdc < 1) {
+    throw new Error("Batch settlement amount is too small.");
+  }
+
+  return amountMicroUsdc;
+}
+
 export async function checkBatchSettlementPreflight(
   connection: Connection,
   publicKey: PublicKey,

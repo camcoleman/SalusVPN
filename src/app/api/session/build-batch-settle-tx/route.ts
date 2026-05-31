@@ -3,7 +3,7 @@ import { Connection, PublicKey, clusterApiUrl } from "@solana/web3.js";
 import { getSession } from "@/lib/sessionStore";
 import {
   buildBatchSettlementTransaction,
-  calculateBatchAmount,
+  calculateBatchAccruedAmount,
   serializeSettlementTransaction,
 } from "@/lib/settlement";
 
@@ -70,7 +70,12 @@ export async function POST(request: Request) {
       validatedIds.push(sessionId);
     }
 
-    const amountMicroUsdc = calculateBatchAmount(validatedIds.length);
+    const validatedSessions = validatedIds.map(
+      (sessionId) => getSession(sessionId)!
+    );
+    const amountMicroUsdc = calculateBatchAccruedAmount(
+      validatedSessions.map((session) => session.accruedCostUSDC)
+    );
     const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
 
     const { transaction, blockhash, lastValidBlockHeight } =
